@@ -40,7 +40,7 @@
 
 // ------------------------ ARCHIVO DE AUTENTICACIÓN (authService.js) ------------------------
 
-const BASE_URL = "http://192.168.150.4:8000";
+const BASE_URL = "http://192.168.150.6:8000";
 const LOGIN_URL = `${BASE_URL}/auth/token`;
 
 /**
@@ -91,3 +91,5 @@ export const getAuthHeaders = () => ({
   "Content-Type": "application/json",
   Authorization: `Bearer ${getToken()}`,
 });
+
+

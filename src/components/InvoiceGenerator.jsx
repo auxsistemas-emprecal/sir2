@@ -5,7 +5,9 @@ import LogoEmprecal from "../assets/services/img/Estrategia-comercial.png";
 
 import { Save, Printer, FileText, PlusCircle } from "lucide-react";
 import InputGroup from "./InputGroup";
-import InputAutosuggest from "./InputAutosuggest";
+import InputAutosuggest from "../components/InputAutosuggest";
+import { createMovimiento } from "../assets/services/apiService"; // <--- 🛑 AGREGAR ESTA LÍNEA
+import { searchTercero } from "../assets/services/apiService";
 
 // --- Nuevo Componente: Modal de Confirmación ---
 const Modal = ({
@@ -56,6 +58,7 @@ export default function InvoiceGenerator({
     conductor: "",
     cedula: "",
     tercero: "",
+    idTercero: null, // <--- 🛑 NUEVO: Para guardar el ID del cliente
     telefono: "",
     direccion: "",
     placa: "",
@@ -65,6 +68,7 @@ export default function InvoiceGenerator({
       paymentTypes.length > 0
         ? paymentTypes[0].tipo_pago ?? paymentTypes[0].name
         : "Efectivo",
+    idTipoPago: paymentTypes.length > 0 ? paymentTypes[0].idTipoPago ?? null : null, // <--- 🛑 NUEVO: Para guardar el ID del tipo de pago
     observacion: "",
     horaLlegada: new Date().toLocaleTimeString("en-US", {
       hour: "2-digit",
@@ -151,7 +155,35 @@ export default function InvoiceGenerator({
 
   // cambios en inputs generales (fecha, tercero, flags, tipoPago, etc.)
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, type, checked, completeObject } = e.target;
+
+    if (name == "tercero" && completeObject) {
+      setFormData((prev) => ({
+        ...prev,
+        conductor: completeObject.conductor,
+        cedula: completeObject.cedula,
+        tercero: completeObject.nombre,
+        telefono: completeObject.telefono,
+        direccion: completeObject.direccion,
+        placa: completeObject.placa,
+      }));
+      return;
+    }
+
+    // 🛑 Manejo de TIPO DE PAGO
+    if (name === "tipoPago") {
+      // Buscar el ID en la lista de tipos de pago que se recibe por props
+      const selectedPayment = paymentTypes.find(
+        (p) => (p.tipo_pago || p.name) === value
+      );
+
+      setFormData((prev) => ({
+        ...prev,
+        tipoPago: value,
+        idTipoPago: selectedPayment?.idTipoPago || null, // Guardamos el ID
+      }));
+      return; // Detener aquí si es tipoPago
+    }
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -248,35 +280,99 @@ export default function InvoiceGenerator({
     setShowModal(true);
   };
 
+//---------------------------------------------------------------------------------------
+//
+//-------------------------------------------------------------------------------------
+  // // --- NUEVA FUNCIÓN: Confirmar guardado (se llama desde el modal) ---
+  // const handleConfirmSave = () => {
+  //   setShowModal(false); // Cerramos el modal
+
+  //   // construir payload con la lista de materiales según formato C (ID + nombre + precio + cantidad)
+  //   const materialesPayload = lineItems.map((li) => ({
+  //     idMaterial: li.idMaterial ?? null,
+  //     nombre_material: li.nombre_material ?? "",
+  //     cantidad: Number(li.cantidad) || 0,
+  //     precioUnitario: Number(li.precioUnitario) || 0,
+  //   }));
+
+  //   const fullRecord = {
+  //     ...formData,
+  //     materiales: materialesPayload,
+  //     ...calculos,
+  //   };
+  //   console.log(fullRecord);
+  //   // Almacenar el registro antes de incrementar/resetear
+  //   setLastSavedRecord(fullRecord);
+
+  //   // Llamada al callback onSave
+  //   if (typeof onSave === "function") {
+  //     onSave(fullRecord);
+  //   }
+
+  //   // Después de guardar, aumentamos consecutivo y reseteamos cantidades/observación
+  //   setFormData((prev) => {
+  //     // Intentar parsear el número de remisión
+  //     const nextRemisionNumber = parseInt(prev.remision, 10);
+  //     const nextRemision = isNaN(nextRemisionNumber)
+  //       ? prev.remision // Si no es un número, mantenerlo
+  //       : (nextRemisionNumber + 1).toString(); // Si es un número, incrementar
+  //     return {
+  //       ...prev,
+  //       remision: nextRemision,
+  //       observacion: "",
+  //       conductor: "", // También resetear conductor, placa, tercero, teléfono, dirección
+  //       placa: "",
+  //       tercero: "",
+  //       telefono: "",
+  //       direccion: "",
+  //     };
+  //   });
+
+  //   // Resetear lineItems: mantenemos la misma estructura pero cantidades en 0
+  //   setLineItems(initialLineItems); // Usar la función de inicialización para resetear
+
+  //   // Mensaje de éxito
+  //   // alert(
+  //   //   `¡Remisión ${formData.remision} guardada en Movimientos exitosamente! Ahora puede imprimir.`
+  //   // );
+  // };
+//--------------------------------------------------------------------------------------------------------
+//
+//--------------------------------------------------------------------------------------------------------
+
   // --- NUEVA FUNCIÓN: Confirmar guardado (se llama desde el modal) ---
-  const handleConfirmSave = () => {
+const handleConfirmSave = async () => { // 🛑 CAMBIO CLAVE: Se hace asíncrona
+  setShowModal(false); // Cerramos el modal
 
-    setShowModal(false); // Cerramos el modal
+  // construir payload con la lista de materiales según formato C (ID + nombre + precio + cantidad)
+  const materialesPayload = lineItems.map((li) => ({
+    idMaterial: li.idMaterial ?? null,
+    nombre_material: li.nombre_material ?? "",
+    cantidad: Number(li.cantidad) || 0,
+    precioUnitario: Number(li.precioUnitario) || 0,
+  }));
 
-    // construir payload con la lista de materiales según formato C (ID + nombre + precio + cantidad)
-    const materialesPayload = lineItems.map((li) => ({
-      idMaterial: li.idMaterial ?? null,
-      nombre_material: li.nombre_material ?? "",
-      cantidad: Number(li.cantidad) || 0,
-      precioUnitario: Number(li.precioUnitario) || 0,
-    }));
+  const fullRecord = {
+    ...formData,
+    materiales: materialesPayload,
+    ...calculos,
+  };
+  console.log(fullRecord);
 
-    const fullRecord = {
-      id: Date.now(),
-      ...formData,
-      materiales: materialesPayload,
-      ...calculos,
-    };
-    console.log(fullRecord);
-    // Almacenar el registro antes de incrementar/resetear
+  try {
+    // 1. LLAMADA ASÍNCRONA A LA PROP `onSave`
+    // Esperamos la respuesta de la API.
+    const savedMovement = await onSave(fullRecord); // 🛑 CAMBIO CLAVE: Se usa await
+
+    // 2. MANEJO DE ÉXITO: Almacenar el registro y mostrar mensaje.
+    // Almacenar el registro para la vista/impresión (Esto solo se hace si el guardado es exitoso)
     setLastSavedRecord(fullRecord);
 
-    // Llamada al callback onSave
-    if (typeof onSave === "function") {
-      onSave(fullRecord);
-    }
+    alert(
+      `✅ Remisión ${savedMovement?.remision || fullRecord.remision} guardada exitosamente y movimientos actualizados.`
+    );
 
-    // Después de guardar, aumentamos consecutivo y reseteamos cantidades/observación
+    // 3. Después de guardar con éxito, aumentamos consecutivo y reseteamos formulario
     setFormData((prev) => {
       // Intentar parsear el número de remisión
       const nextRemisionNumber = parseInt(prev.remision, 10);
@@ -297,12 +393,13 @@ export default function InvoiceGenerator({
 
     // Resetear lineItems: mantenemos la misma estructura pero cantidades en 0
     setLineItems(initialLineItems); // Usar la función de inicialización para resetear
-
-    // Mensaje de éxito
-    // alert(
-    //   `¡Remisión ${formData.remision} guardada en Movimientos exitosamente! Ahora puede imprimir.`
-    // );
-  };
+  } catch (error) {
+    // 4. MANEJO DE ERROR: Mostrar un mensaje detallado al usuario.
+    console.error("Fallo al guardar la remisión:", error);
+    alert(`❌ Error al guardar la remisión: ${error.message || 'Error desconocido al conectar con la API.'}`);
+    // Si falla, el formulario no se resetea para que el usuario pueda corregir y reintentar.
+  }
+};
 
   // --- NUEVA FUNCIÓN: Iniciar un nuevo registro ---
   const handleNewRecord = () => {
@@ -410,15 +507,19 @@ export default function InvoiceGenerator({
                       target: { name: "remision", value: e.target.value },
                     })
                   }
+                  validate={false}
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InputGroup
-                  label="Conductor"
-                  name="conductor"
-                  value={formData.conductor}
+                <InputAutosuggest
+                  label="Cliente / Tercero"
+                  name="tercero"
+                  value={formData.tercero}
                   onChange={(e) => handleChange(e)}
+                  searchEndpoint={searchTercero}
+                  textSuggestor="nombre"
+                  keyItems="id_tercero"
                 />
                 <InputGroup
                   label="Placa Vehículo"
@@ -430,10 +531,10 @@ export default function InvoiceGenerator({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
-                  <InputAutosuggest
-                    label="Cliente / Tercero"
-                    name="tercero"
-                    value={formData.tercero}
+                  <InputGroup
+                    label="Conductor"
+                    name="conductor"
+                    value={formData.conductor}
                     onChange={(e) => handleChange(e)}
                   />
                 </div>
@@ -608,6 +709,7 @@ export default function InvoiceGenerator({
                   type="time"
                   value={formData.horaSalida}
                   onChange={(e) => handleChange(e)}
+                  validate={false}
                 />
 
                 <div className="col-span-2 flex flex-col gap-1">
@@ -637,6 +739,7 @@ export default function InvoiceGenerator({
                 name="observacion"
                 value={formData.observacion}
                 onChange={(e) => handleChange(e)}
+                validate={false}
               />
 
               {/* El botón ahora llama a handleAttemptSave para mostrar el modal */}

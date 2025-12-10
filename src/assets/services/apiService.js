@@ -1,7 +1,7 @@
 // Importa token
 import { getToken } from "./authService";
 
-const BASE_URL = "http://192.168.150.4:8000";
+const BASE_URL = "http://192.168.150.6:8000";
 
 // Headers con token
 const getAuthHeaders = () => ({
@@ -14,8 +14,6 @@ const getAuthHeaders = () => ({
 
 /**
  * Obtiene todos los movimientos.
- * Nota: Si el frontend solo necesita los IDs para un solo movimiento, esta función
- * usando /vistaMovimientos sigue siendo útil para la tabla principal.
  * @returns {Promise<Array>} Array de movimientos o un array vacío.
  */
 export const fetchMovimientos = async () => {
@@ -39,9 +37,6 @@ export const fetchMovimientos = async () => {
 };
 
 /**
- * 🔑 NUEVA FUNCIÓN IMPLEMENTADA
- * Obtiene un movimiento específico por su remisión usando el nuevo endpoint que incluye los IDs.
- * Llama a GET /movimientos/{remision}.
  * @param {string|number} remision - El número de remisión.
  * @returns {Promise<object | null>} El objeto del movimiento o null si no se encuentra.
  */
@@ -85,6 +80,7 @@ export const fetchMovimiento = async (remision) => {
  * @param {object} movimiento - Los datos del movimiento a crear.
  * @returns {Promise<object>} La respuesta del API.
  */
+
 export const createMovimiento = async (movimiento) => {
   const res = await fetch(`${BASE_URL}/movimientos`, {
     method: "POST",
@@ -126,26 +122,26 @@ export const updateMovimiento = async (remision, movimiento) => {
 };
 
 /**
- * 4. Envía la actualización (PUT) al endpoint seguro /movimientos/{remision}.
+ * Envía la actualización (PUT) al endpoint seguro /movimientos/{remision}.
  * @param {string|number} remision - El número de remisión.
  * @param {string} newState - El nuevo estado ('VIGENTE' o 'CANCELADO').
  * @returns {Promise<object>} La respuesta del API.
  */
 export const updateMovimientoStatus = async (remision, newState) => {
-  // 1. OBTENER el movimiento completo usando el endpoint específico /movimientos/{remision}
+  // OBTENER el movimiento completo usando el endpoint específico /movimientos/{remision}
   const movimientoActual = await fetchMovimiento(remision);
 
   if (!movimientoActual) {
     throw new Error(`Movimiento con remisión ${remision} no encontrado.`);
   }
 
-  // 2. NORMALIZAR los datos para el PUT, asegurando que los IDs se mantienen.
+  // NORMALIZAR los datos para el PUT, asegurando que los IDs se mantienen.
   const movimientoNormalizado = {
     // --- PROPIEDADES BASE Y NUMÉRICAS ---
     remision: Number(movimientoActual.remision) || 0,
     fecha: movimientoActual.fecha || new Date().toISOString(),
 
-    // ✅ CORREGIDO: Se toman los IDs correctos de la respuesta del GET.
+    //Se toman los IDs correctos de la respuesta del GET.
     idTercero: Number(movimientoActual.idTercero),
     subtotal: Number(movimientoActual.subtotal) || 0,
     iva: Number(movimientoActual.iva) || 0,
@@ -165,11 +161,11 @@ export const updateMovimientoStatus = async (remision, newState) => {
     observacion: movimientoActual.observacion || "",
     conductor: movimientoActual.conductor || "",
 
-    // 3. SOBRESCRIBIR EL ESTADO
+    //SOBRESCRIBIR EL ESTADO
     estado: newState,
   };
 
-  // 4. Enviar la actualización PUT al endpoint seguro /movimientos/{remision}.
+  //Enviar la actualización PUT al endpoint seguro /movimientos/{remision}.
   return await updateMovimiento(remision, movimientoNormalizado);
 };
 
@@ -224,6 +220,62 @@ export const searchTercero = async (query = "") => {
 };
 
 /* ============================================================
+   PRECIOS ESPECIALES
+   ============================================================ */
+export const fetchPreciosEspeciales = async () => {
+  try {
+    const response = await fetch(`${BASE_URL}/preciosEspeciales`, {
+      headers: getAuthHeaders(),
+    });
+    const json = await response.json();
+    return Array.isArray(json.data) ? json.data : [];
+  } catch (error) {
+    console.log("Error obteniendo los precios espciales: ", error);
+    return [];
+  }
+};
+
+export const deletePrecioEspecial = async (id_tercero_material) => {
+  const res = await fetch(`${BASE_URL}/preciosEspeciales/${id_tercero_material}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+
+  return await res.json();
+};
+
+export const createPrecioEspecial = async (precioEspecial) => {
+  try {
+    const response = await fetch(`${BASE_URL}/preciosEspeciales`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(precioEspecial),
+    });
+    return await response.json();
+  } catch (error) {
+    console.log("Error creando el precio especial: ", error);
+    return [];
+  }
+};
+
+export const updatePrecioEspecial = async (id_tercero_material, formData) => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/preciosEspeciales/${id_tercero_material}`,
+      {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(formData),
+      }
+    );
+    return await response.json();
+  } catch (error) {
+    console.log("Error creando el precio especial: ", error);
+    return [];
+  }
+};
+
+/* ============================================================
    🟦 PLACAS
    ============================================================ */
 
@@ -254,6 +306,20 @@ export const fetchMateriales = async () => {
     return Array.isArray(json.data) ? json.data : [];
   } catch (error) {
     console.error("Error obteniendo materiales:", error);
+    return [];
+  }
+};
+
+export const searchMateriales = async (query = "") => {
+  try {
+    const res = await fetch(`${BASE_URL}/materiales/${query}`, {
+      headers: getAuthHeaders(),
+    });
+
+    const json = await res.json();
+    return Array.isArray(json.data) ? json.data : [];
+  } catch (error) {
+    console.error("Error obteniendo material:", error);
     return [];
   }
 };
@@ -333,6 +399,7 @@ export const deleteTipoPago = async (id) => {
 
   return await res.json();
 };
+
 
 // --------------------------archivo anterior hasta el 01/12 9:30-------------------------
 
