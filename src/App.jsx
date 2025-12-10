@@ -25,8 +25,9 @@ import {
   fetchMateriales,
   fetchPlacas,
   fetchMovimientos,
-  createMovimiento, // 🛑 1. Importar la función de creación
   fetchPreciosEspeciales,
+  createMovimiento, // 🛑 1. Importar la función de creación
+  // createMovimientoItem,
   // fetchAnticipos
 } from "./assets/services/apiService.js";
 

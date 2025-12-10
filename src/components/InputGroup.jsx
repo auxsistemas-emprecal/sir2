@@ -22,7 +22,7 @@ const InputGroup = ({ label, name, value, onChange, type = "text", tooltip = nul
     <input 
       type={type} 
       name={name} 
-      value={value} 
+      value={value ?? ""} 
       onChange={onChange} 
       className={`w-full px-3 py-2.5 border ${validate ? (value == "" ? "border-red-400"  : "border-gray-300") : "border-gray-300"} rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all bg-white shadow-sm text-sm`}
       placeholder="..." 

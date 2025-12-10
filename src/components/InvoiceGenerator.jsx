@@ -6,8 +6,11 @@ import LogoEmprecal from "../assets/services/img/Estrategia-comercial.png";
 import { Save, Printer, FileText, PlusCircle } from "lucide-react";
 import InputGroup from "./InputGroup";
 import InputAutosuggest from "../components/InputAutosuggest";
-import { createMovimiento } from "../assets/services/apiService"; // <--- 🛑 AGREGAR ESTA LÍNEA
-import { searchTercero } from "../assets/services/apiService";
+import { createMovimiento } from "../assets/services/apiService";
+import {
+  searchTercero,
+  fetchPreciosEspeciales,
+} from "../assets/services/apiService";
 
 // --- Nuevo Componente: Modal de Confirmación ---
 const Modal = ({
@@ -45,6 +48,7 @@ const Modal = ({
   );
 };
 // ----------------------------------------------
+//-----------------------------------------------
 
 export default function InvoiceGenerator({
   materials = [],
@@ -68,7 +72,8 @@ export default function InvoiceGenerator({
       paymentTypes.length > 0
         ? paymentTypes[0].tipo_pago ?? paymentTypes[0].name
         : "Efectivo",
-    idTipoPago: paymentTypes.length > 0 ? paymentTypes[0].idTipoPago ?? null : null, // <--- 🛑 NUEVO: Para guardar el ID del tipo de pago
+    idTipoPago:
+      paymentTypes.length > 0 ? paymentTypes[0].idTipoPago ?? null : null, // <--- 🛑 NUEVO: Para guardar el ID del tipo de pago
     observacion: "",
     horaLlegada: new Date().toLocaleTimeString("en-US", {
       hour: "2-digit",
@@ -112,9 +117,13 @@ export default function InvoiceGenerator({
     total: 0,
   });
 
+  //---------------------------------------------------------------------------------
+  //---------------------------------------------------------------------------------
+
   // --- NUEVOS ESTADOS ---
   const [showModal, setShowModal] = useState(false);
   const [lastSavedRecord, setLastSavedRecord] = useState(null); // Almacena el registro guardado para la vista/impresión
+  const [preciosEspeciales, setPreciosEspeciales] = useState([]);
   // ----------------------
 
   // si cambia la lista de materials, actualizamos la primer línea si estaba vacía
@@ -156,18 +165,23 @@ export default function InvoiceGenerator({
   // cambios en inputs generales (fecha, tercero, flags, tipoPago, etc.)
   const handleChange = (e) => {
     const { name, value, type, checked, completeObject } = e.target;
-
-    if (name == "tercero" && completeObject) {
+    if (name == "tercero" && typeof completeObject == "object") {
       setFormData((prev) => ({
         ...prev,
         conductor: completeObject.conductor,
         cedula: completeObject.cedula,
+        idTercero: completeObject.id_tercero,
         tercero: completeObject.nombre,
         telefono: completeObject.telefono,
         direccion: completeObject.direccion,
         placa: completeObject.placa,
       }));
       return;
+    } else if (name == "tercero") {
+      setFormData((prev) => ({
+        ...prev,
+        tercero: value,
+      }));
     }
 
     // 🛑 Manejo de TIPO DE PAGO
@@ -189,6 +203,16 @@ export default function InvoiceGenerator({
       [name]: type === "checkbox" ? checked : value,
     }));
   };
+
+  // useEffect para que cuando se cambie el tercero se actualice la lista de materiales considerando los precios especiales
+  const changePreciosEspecialesForTercero = async (idTercero) => {
+    const responsePE = await fetchPreciosEspeciales();
+    console.log(responsePE);
+  };
+  
+  useEffect(() => {
+    changePreciosEspecialesForTercero("");
+  }, [formData]);
 
   // cambios en una fila (line item)
   const handleLineChange = (index, field, value) => {
@@ -280,9 +304,9 @@ export default function InvoiceGenerator({
     setShowModal(true);
   };
 
-//---------------------------------------------------------------------------------------
-//
-//-------------------------------------------------------------------------------------
+  //---------------------------------------------------------------------------------------
+  //
+  //-------------------------------------------------------------------------------------
   // // --- NUEVA FUNCIÓN: Confirmar guardado (se llama desde el modal) ---
   // const handleConfirmSave = () => {
   //   setShowModal(false); // Cerramos el modal
@@ -336,70 +360,77 @@ export default function InvoiceGenerator({
   //   //   `¡Remisión ${formData.remision} guardada en Movimientos exitosamente! Ahora puede imprimir.`
   //   // );
   // };
-//--------------------------------------------------------------------------------------------------------
-//
-//--------------------------------------------------------------------------------------------------------
+  //--------------------------------------------------------------------------------------------------------
+  //
+  //--------------------------------------------------------------------------------------------------------
 
   // --- NUEVA FUNCIÓN: Confirmar guardado (se llama desde el modal) ---
-const handleConfirmSave = async () => { // 🛑 CAMBIO CLAVE: Se hace asíncrona
-  setShowModal(false); // Cerramos el modal
+  const handleConfirmSave = async () => {
+    // 🛑 CAMBIO CLAVE: Se hace asíncrona
+    setShowModal(false); // Cerramos el modal
 
-  // construir payload con la lista de materiales según formato C (ID + nombre + precio + cantidad)
-  const materialesPayload = lineItems.map((li) => ({
-    idMaterial: li.idMaterial ?? null,
-    nombre_material: li.nombre_material ?? "",
-    cantidad: Number(li.cantidad) || 0,
-    precioUnitario: Number(li.precioUnitario) || 0,
-  }));
+    // construir payload con la lista de materiales según formato C (ID + nombre + precio + cantidad)
+    const materialesPayload = lineItems.map((li) => ({
+      idMaterial: li.idMaterial ?? null,
+      nombre_material: li.nombre_material ?? "",
+      cantidad: Number(li.cantidad) || 0,
+      precioUnitario: Number(li.precioUnitario) || 0,
+    }));
 
-  const fullRecord = {
-    ...formData,
-    materiales: materialesPayload,
-    ...calculos,
+    const fullRecord = {
+      ...formData,
+      materiales: materialesPayload,
+      ...calculos,
+    };
+    console.log(fullRecord);
+
+    try {
+      // 1. LLAMADA ASÍNCRONA A LA PROP `onSave`
+      // Esperamos la respuesta de la API.
+      const savedMovement = await onSave(fullRecord); // 🛑 CAMBIO CLAVE: Se usa await
+
+      // 2. MANEJO DE ÉXITO: Almacenar el registro y mostrar mensaje.
+      // Almacenar el registro para la vista/impresión (Esto solo se hace si el guardado es exitoso)
+      setLastSavedRecord(fullRecord);
+
+      alert(
+        `✅ Remisión ${
+          savedMovement?.remision || fullRecord.remision
+        } guardada exitosamente y movimientos actualizados.`
+      );
+
+      // 3. Después de guardar con éxito, aumentamos consecutivo y reseteamos formulario
+      setFormData((prev) => {
+        // Intentar parsear el número de remisión
+        const nextRemisionNumber = parseInt(prev.remision, 10);
+        const nextRemision = isNaN(nextRemisionNumber)
+          ? prev.remision // Si no es un número, mantenerlo
+          : (nextRemisionNumber + 1).toString(); // Si es un número, incrementar
+        return {
+          ...prev,
+          remision: nextRemision,
+          observacion: "",
+          conductor: "", // También resetear conductor, placa, tercero, teléfono, dirección
+          placa: "",
+          tercero: "",
+          telefono: "",
+          direccion: "",
+        };
+      });
+
+      // Resetear lineItems: mantenemos la misma estructura pero cantidades en 0
+      setLineItems(initialLineItems); // Usar la función de inicialización para resetear
+    } catch (error) {
+      // 4. MANEJO DE ERROR: Mostrar un mensaje detallado al usuario.
+      console.error("Fallo al guardar la remisión:", error);
+      alert(
+        `❌ Error al guardar la remisión: ${
+          error.message || "Error desconocido al conectar con la API."
+        }`
+      );
+      // Si falla, el formulario no se resetea para que el usuario pueda corregir y reintentar.
+    }
   };
-  console.log(fullRecord);
-
-  try {
-    // 1. LLAMADA ASÍNCRONA A LA PROP `onSave`
-    // Esperamos la respuesta de la API.
-    const savedMovement = await onSave(fullRecord); // 🛑 CAMBIO CLAVE: Se usa await
-
-    // 2. MANEJO DE ÉXITO: Almacenar el registro y mostrar mensaje.
-    // Almacenar el registro para la vista/impresión (Esto solo se hace si el guardado es exitoso)
-    setLastSavedRecord(fullRecord);
-
-    alert(
-      `✅ Remisión ${savedMovement?.remision || fullRecord.remision} guardada exitosamente y movimientos actualizados.`
-    );
-
-    // 3. Después de guardar con éxito, aumentamos consecutivo y reseteamos formulario
-    setFormData((prev) => {
-      // Intentar parsear el número de remisión
-      const nextRemisionNumber = parseInt(prev.remision, 10);
-      const nextRemision = isNaN(nextRemisionNumber)
-        ? prev.remision // Si no es un número, mantenerlo
-        : (nextRemisionNumber + 1).toString(); // Si es un número, incrementar
-      return {
-        ...prev,
-        remision: nextRemision,
-        observacion: "",
-        conductor: "", // También resetear conductor, placa, tercero, teléfono, dirección
-        placa: "",
-        tercero: "",
-        telefono: "",
-        direccion: "",
-      };
-    });
-
-    // Resetear lineItems: mantenemos la misma estructura pero cantidades en 0
-    setLineItems(initialLineItems); // Usar la función de inicialización para resetear
-  } catch (error) {
-    // 4. MANEJO DE ERROR: Mostrar un mensaje detallado al usuario.
-    console.error("Fallo al guardar la remisión:", error);
-    alert(`❌ Error al guardar la remisión: ${error.message || 'Error desconocido al conectar con la API.'}`);
-    // Si falla, el formulario no se resetea para que el usuario pueda corregir y reintentar.
-  }
-};
 
   // --- NUEVA FUNCIÓN: Iniciar un nuevo registro ---
   const handleNewRecord = () => {

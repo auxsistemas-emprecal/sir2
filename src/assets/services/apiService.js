@@ -169,6 +169,25 @@ export const updateMovimientoStatus = async (remision, newState) => {
   return await updateMovimiento(remision, movimientoNormalizado);
 };
 
+/**
+ * Crea un item individual (material) asociado a un movimiento.
+ * Endpoint: /movimientoItems
+ */
+export const createMovimientoItem = async (item) => {
+  const res = await fetch(`${BASE_URL}/movimientoItems`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(item),
+  });
+
+  if (!res.ok) {
+    const errorDetails = await res.json();
+    console.error(`Error ${res.status} al crear item:`, errorDetails);
+    throw new Error(`Fallo la creación del item (Estatus: ${res.status})`);
+  }
+  return await res.json();
+};
+
 /* ============================================================
    🟩 TERCEROS
    ============================================================ */
@@ -236,10 +255,13 @@ export const fetchPreciosEspeciales = async () => {
 };
 
 export const deletePrecioEspecial = async (id_tercero_material) => {
-  const res = await fetch(`${BASE_URL}/preciosEspeciales/${id_tercero_material}`, {
-    method: "DELETE",
-    headers: getAuthHeaders(),
-  });
+  const res = await fetch(
+    `${BASE_URL}/preciosEspeciales/${id_tercero_material}`,
+    {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    }
+  );
 
   return await res.json();
 };
@@ -399,6 +421,10 @@ export const deleteTipoPago = async (id) => {
 
   return await res.json();
 };
+
+
+
+
 
 
 // --------------------------archivo anterior hasta el 01/12 9:30-------------------------
