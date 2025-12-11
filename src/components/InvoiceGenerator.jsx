@@ -3,13 +3,15 @@
 import React, { useState, useEffect } from "react";
 import LogoEmprecal from "../assets/services/img/Estrategia-comercial.png";
 
-import { Save, Printer, FileText, PlusCircle } from "lucide-react";
+import { Save, Printer, FileText, PlusCircle, XCircle } from "lucide-react";
 import InputGroup from "./InputGroup";
 import InputAutosuggest from "../components/InputAutosuggest";
 import { createMovimiento } from "../assets/services/apiService";
 import {
   searchTercero,
   fetchPreciosEspeciales,
+  fetchMateriales,
+  fetchLastRemisionNumber, // 🛑 Importar la nueva función
 } from "../assets/services/apiService";
 
 // --- Nuevo Componente: Modal de Confirmación ---
@@ -51,10 +53,22 @@ const Modal = ({
 //-----------------------------------------------
 
 export default function InvoiceGenerator({
+  setMaterials,
   materials = [],
   paymentTypes = [],
   onSave,
+  //  RECIBE DATOS DE EDICIÓN
+  editingMovement,
+  editingItems,
 }) {
+
+  // 🛑 MODIFICACIÓN 1: Nuevo estado para guardar el número de remisión
+    const [nextRemisionNumber, setNextRemisionNumber] = useState(null);
+
+  const defaultPaymentType =
+    paymentTypes.length > 0
+      ? paymentTypes[0]
+      : { tipo_pago: "Efectivo", idTipoPago: null, name: "Efectivo" };
   // Estado inicial base
   const initialFormData = {
     fecha: new Date().toISOString().split("T")[0],
@@ -89,10 +103,10 @@ export default function InvoiceGenerator({
       return [
         {
           id: Date.now(),
-          idMaterial: m.idMaterial,
-          nombre_material: m.nombre_material,
+          idMaterial: 0,
+          nombre_material: "",
           cantidad: 0,
-          precioUnitario: m.precio ?? m.precioUnitario ?? 0,
+          precioUnitario: 0,
         },
       ];
     }
@@ -108,6 +122,8 @@ export default function InvoiceGenerator({
   };
 
   // Estados
+  const [isEditing, setIsEditing] = useState(false);
+
   const [formData, setFormData] = useState(initialFormData);
   const [lineItems, setLineItems] = useState(initialLineItems);
   const [calculos, setCalculos] = useState({
@@ -126,8 +142,73 @@ export default function InvoiceGenerator({
   const [preciosEspeciales, setPreciosEspeciales] = useState([]);
   // ----------------------
 
+  useEffect(() => {
+    // 1. Verificar que estamos en modo edición y que los datos existen
+    if (editingMovement && editingItems.data.length > 0) {
+      console.log(
+        "Modo Edición: Inicializando formulario con datos compartidos."
+      );
+      console.log(editingMovement);
+      console.log(editingItems);
+      // -----------------------------------------------------------
+      // A. Inicializar la Cabecera (formData)
+      // -----------------------------------------------------------
+      setFormData(() => {
+        const [fecha, hora] = editingMovement.fecha.split("T");
+
+        return {
+          // Mantenemos las claves de la cabecera que vienen de la prop
+          ...editingMovement,
+
+          // 💡 IMPORTANTE: Mapeo de valores si es necesario.
+          // Los checkboxes (incluirIva/Ret) a menudo vienen como números (1/0) o booleanos (true/false) desde la API.
+          // Asegúrese de que coincidan con lo que espera su formulario.
+          incluirIva: editingMovement.incluyeIva === 1,
+          incluirRet: editingMovement.incluyeRetencion === 1,
+          fecha: fecha,
+          horaLlegada: hora.substring(0, 5),
+          // Asegurarse de que el ID del tercero sea numérico si su campo lo requiere
+          idTercero: parseInt(editingMovement.idTercero),
+
+          // Si tiene un campo 'date', asegúrese de que el formato sea el correcto para el input.
+        };
+      });
+
+      // -----------------------------------------------------------
+      // B. Inicializar los Ítems (lineItems)
+      // -----------------------------------------------------------
+      // Mapeamos los ítems detallados para asegurarnos de que los valores numéricos
+      // (cantidad, precio) sean Strings, si sus inputs esperan strings.
+      const mappedItems = editingItems.data.map((item) => ({
+        ...item,
+        // Aseguramos que los valores que van a los inputs de texto sean strings
+        cantidad: String(item.cantidad),
+        precioUnitario: String(item.precioUnitario),
+
+        // Si necesita el nombre del material, lo puede añadir aquí
+        // nombreMaterial: item.nombreMaterial // Asumiendo que viene en la prop o lo puede buscar
+      }));
+
+      setLineItems(mappedItems);
+    } else {
+      // 🛑 Lógica para LIMPIAR al salir de la edición
+      // Si no hay datos de edición, resetear a los valores iniciales por defecto.
+      // Esto es crucial cuando se pasa de EDITAR a CREAR una nueva remisión.
+      // (Asumiendo que tiene un initialFormData y un initialLineItems o [] para el reset)
+      setFormData(initialFormData);
+      setLineItems([]);
+    }
+  }, [editingMovement, editingItems]);
+
   // si cambia la lista de materials, actualizamos la primer línea si estaba vacía
   useEffect(() => {
+    (async () => {
+      // cargar precios especiales si no están cargados
+      if (preciosEspeciales.length === 0) {
+        const responsePE = await fetchPreciosEspeciales();
+        setPreciosEspeciales(responsePE);
+      }
+    })();
     setLineItems((prev) => {
       // si primer item no tiene idMaterial y materials trae algo, rellenarlo
       if (prev.length === 1 && !prev[0].idMaterial && materials.length > 0) {
@@ -135,15 +216,15 @@ export default function InvoiceGenerator({
         return [
           {
             ...prev[0],
-            idMaterial: m.idMaterial,
-            nombre_material: m.nombre_material,
-            precioUnitario: m.precio ?? 0,
+            idMaterial: 0,
+            nombre_material: "",
+            precioUnitario: 0,
           },
         ];
       }
       return prev;
     });
-  }, [materials]);
+  }, [materials, preciosEspeciales]);
 
   // recalcular totales cuando cambian lineItems o flags
   useEffect(() => {
@@ -204,16 +285,6 @@ export default function InvoiceGenerator({
     }));
   };
 
-  // useEffect para que cuando se cambie el tercero se actualice la lista de materiales considerando los precios especiales
-  const changePreciosEspecialesForTercero = async (idTercero) => {
-    const responsePE = await fetchPreciosEspeciales();
-    console.log(responsePE);
-  };
-  
-  useEffect(() => {
-    changePreciosEspecialesForTercero("");
-  }, [formData]);
-
   // cambios en una fila (line item)
   const handleLineChange = (index, field, value) => {
     setLineItems((prev) =>
@@ -227,11 +298,16 @@ export default function InvoiceGenerator({
             const idNum = Number(value);
             selected = materials.find((m) => Number(m.idMaterial) === idNum);
             if (selected) {
+              const id_tercero_material =
+                formData.idTercero + "_" + selected.idMaterial;
+              const materialPE = preciosEspeciales.filter(
+                (el) => el.id_tercero_material === id_tercero_material
+              );
               return {
                 ...li,
                 idMaterial: selected.idMaterial,
                 nombre_material: selected.nombre_material,
-                precioUnitario: selected.precio ?? li.precioUnitario,
+                precioUnitario: materialPE[0]?.precio ?? selected.precio,
               };
             } else {
               // si no encuentra, solo setear idMaterial
@@ -241,11 +317,16 @@ export default function InvoiceGenerator({
             // cambio por nombre (por compatibilidad)
             selected = materials.find((m) => m.nombre_material === value);
             if (selected) {
+              const id_tercero_material =
+                formData.idTercero + "_" + selected.idMaterial;
+              const materialPE = preciosEspeciales.filter(
+                (el) => el.id_tercero_material === id_tercero_material
+              );
               return {
                 ...li,
                 idMaterial: selected.idMaterial,
                 nombre_material: selected.nombre_material,
-                precioUnitario: selected.precio ?? li.precioUnitario,
+                precioUnitario: materialPE[0]?.precio ?? selected.precio,
               };
             } else {
               return { ...li, nombre_material: value };
@@ -365,70 +446,154 @@ export default function InvoiceGenerator({
   //--------------------------------------------------------------------------------------------------------
 
   // --- NUEVA FUNCIÓN: Confirmar guardado (se llama desde el modal) ---
+  // const handleConfirmSave = async () => {
+  //   // 🛑 CAMBIO CLAVE: Se hace asíncrona
+  //   setShowModal(false); // Cerramos el modal
+
+  //   // construir payload con la lista de materiales según formato C (ID + nombre + precio + cantidad)
+  //   const materialesPayload = lineItems.map((li) => ({
+  //     idMaterial: li.idMaterial ?? null,
+  //     nombre_material: li.nombre_material ?? "",
+  //     cantidad: Number(li.cantidad) || 0,
+  //     precioUnitario: Number(li.precioUnitario) || 0,
+  //   }));
+
+  //   const fullRecord = {
+  //     ...formData,
+  //     materiales: materialesPayload,
+  //     ...calculos,
+  //   };
+  //   console.log(fullRecord);
+
+  //   try {
+  //     // 1. LLAMADA ASÍNCRONA A LA PROP `onSave`
+  //     // Esperamos la respuesta de la API.
+  //     const savedMovement = await onSave(fullRecord); // 🛑 CAMBIO CLAVE: Se usa await
+
+  //     // 2. MANEJO DE ÉXITO: Almacenar el registro y mostrar mensaje.
+  //     // Almacenar el registro para la vista/impresión (Esto solo se hace si el guardado es exitoso)
+  //     setLastSavedRecord(fullRecord);
+
+  //     alert(
+  //       `✅ Remisión ${
+  //         savedMovement?.remision || fullRecord.remision
+  //       } guardada exitosamente y movimientos actualizados.`
+  //     );
+
+  //     // 3. Después de guardar con éxito, aumentamos consecutivo y reseteamos formulario
+  //     setFormData((prev) => {
+  //       // Intentar parsear el número de remisión
+  //       const nextRemisionNumber = parseInt(prev.remision, 10);
+  //       const nextRemision = isNaN(nextRemisionNumber)
+  //         ? prev.remision // Si no es un número, mantenerlo
+  //         : (nextRemisionNumber + 1).toString(); // Si es un número, incrementar
+  //       return {
+  //         ...prev,
+  //         remision: nextRemision,
+  //         observacion: "",
+  //         conductor: "", // También resetear conductor, placa, tercero, teléfono, dirección
+  //         placa: "",
+  //         tercero: "",
+  //         telefono: "",
+  //         direccion: "",
+  //       };
+  //     });
+
+  //     // Resetear lineItems: mantenemos la misma estructura pero cantidades en 0
+  //     setLineItems(initialLineItems); // Usar la función de inicialización para resetear
+  //   } catch (error) {
+  //     // 4. MANEJO DE ERROR: Mostrar un mensaje detallado al usuario.
+  //     console.error("Fallo al guardar la remisión:", error);
+  //     alert(
+  //       `❌ Error al guardar la remisión: ${
+  //         error.message || "Error desconocido al conectar con la API."
+  //       }`
+  //     );
+  //     // Si falla, el formulario no se resetea para que el usuario pueda corregir y reintentar.
+  //   }
+  // };
+
+  // En InvoiceGenerator.jsx
+
   const handleConfirmSave = async () => {
-    // 🛑 CAMBIO CLAVE: Se hace asíncrona
-    setShowModal(false); // Cerramos el modal
+    setShowModal(false);
 
-    // construir payload con la lista de materiales según formato C (ID + nombre + precio + cantidad)
-    const materialesPayload = lineItems.map((li) => ({
-      idMaterial: li.idMaterial ?? null,
-      nombre_material: li.nombre_material ?? "",
-      cantidad: Number(li.cantidad) || 0,
-      precioUnitario: Number(li.precioUnitario) || 0,
-    }));
+    // --- CÁLCULO DE CUBICAJE (Respuesta a Pregunta 3.1) ---
+    const totalCubicaje = lineItems.reduce((acc, item) => {
+      return acc + (Number(item.cantidad) || 0);
+    }, 0);
 
-    const fullRecord = {
-      ...formData,
-      materiales: materialesPayload,
-      ...calculos,
+    // 1. Construir el PAYLOAD DE LA CABECERA (/movimientos)
+    // Se asegura snake_case y tipos correctos.
+    const payloadHeader = {
+      // Usamos fecha del form o actual
+      fecha: formData.fecha
+        ? new Date(formData.fecha).toISOString()
+        : new Date().toISOString(),
+
+      // --- PREGUNTA 2: FORZAR PARSEINT ---
+      remision: parseInt(formData.remision) || 0,
+      idTercero: formData.idTercero ? parseInt(formData.idTercero) : 0,
+      idTipoPago: formData.idTipoPago ? parseInt(formData.idTipoPago) : 0,
+
+      // Textos obligatorios (Strings)
+      placa: formData.placa || "",
+      direccion: formData.direccion || "",
+      observacion: formData.observacion || "",
+      conductor: formData.conductor || "",
+
+      // --- PREGUNTA 3.2: CAMPOS FALTANTES CON VALOR POR DEFECTO ---
+      no_ingreso: "", // Valor por defecto string vacío
+      estado: "VIGENTE", // Valor por defecto
+      pagado: 0, // Valor por defecto int
+      factura: 0, // Valor por defecto int
+      cubicaje: totalCubicaje, // El valor calculado
+
+      // Totales calculados
+      subtotal: Number(calculos.subtotal) || 0,
+      iva: Number(calculos.iva) || 0,
+      retencion: Number(calculos.retencion) || 0,
+      total: Number(calculos.total) || 0,
+
+      // --- PREGUNTA 1: CAMBIAR NOMBRES (CamelCase a snake_case) ---
+      incluir_iva: formData.incluirIva ? 1 : 0,
+      incluir_ret: formData.incluirRet ? 1 : 0,
     };
-    console.log(fullRecord);
+
+    // 🛑 DEBUG: Muestra el objeto que se va a enviar
+    console.log("PAYLOAD CABECERA A ENVIAR:", payloadHeader);
 
     try {
-      // 1. LLAMADA ASÍNCRONA A LA PROP `onSave`
-      // Esperamos la respuesta de la API.
-      const savedMovement = await onSave(fullRecord); // 🛑 CAMBIO CLAVE: Se usa await
+      // 🛑 LLAMADA CLAVE: Se asume que App.jsx ya tiene la función addMovement actualizada.
+      await onSave(payloadHeader, lineItems);
 
-      // 2. MANEJO DE ÉXITO: Almacenar el registro y mostrar mensaje.
-      // Almacenar el registro para la vista/impresión (Esto solo se hace si el guardado es exitoso)
-      setLastSavedRecord(fullRecord);
+      // --- LÓGICA DE ÉXITO ---
+      setLastSavedRecord({ ...payloadHeader, materiales: lineItems });
+      alert(`✅ Remisión ${formData.remision} guardada exitosamente.`);
 
-      alert(
-        `✅ Remisión ${
-          savedMovement?.remision || fullRecord.remision
-        } guardada exitosamente y movimientos actualizados.`
-      );
-
-      // 3. Después de guardar con éxito, aumentamos consecutivo y reseteamos formulario
+      // Reseteo del formulario
       setFormData((prev) => {
-        // Intentar parsear el número de remisión
         const nextRemisionNumber = parseInt(prev.remision, 10);
         const nextRemision = isNaN(nextRemisionNumber)
-          ? prev.remision // Si no es un número, mantenerlo
-          : (nextRemisionNumber + 1).toString(); // Si es un número, incrementar
+          ? prev.remision
+          : (nextRemisionNumber + 1).toString();
         return {
           ...prev,
           remision: nextRemision,
           observacion: "",
-          conductor: "", // También resetear conductor, placa, tercero, teléfono, dirección
+          conductor: "",
           placa: "",
           tercero: "",
+          idTercero: null,
           telefono: "",
           direccion: "",
         };
       });
-
-      // Resetear lineItems: mantenemos la misma estructura pero cantidades en 0
-      setLineItems(initialLineItems); // Usar la función de inicialización para resetear
+      setLineItems(initialLineItems);
     } catch (error) {
-      // 4. MANEJO DE ERROR: Mostrar un mensaje detallado al usuario.
-      console.error("Fallo al guardar la remisión:", error);
-      alert(
-        `❌ Error al guardar la remisión: ${
-          error.message || "Error desconocido al conectar con la API."
-        }`
-      );
-      // Si falla, el formulario no se resetea para que el usuario pueda corregir y reintentar.
+      console.error("Fallo al guardar:", error);
+      // Muestra el mensaje de error que propagó App.jsx
+      alert(`❌ Error al guardar: ${error.message}`);
     }
   };
 
@@ -977,708 +1142,3 @@ export default function InvoiceGenerator({
     </div>
   );
 }
-
-// -------------------------ultima version de 03/12/25--------------------------
-
-// // src/components/InvoiceGenerator.jsx
-
-// import React, { useState, useEffect } from "react";
-// import LogoEmprecal from "../assets/services/img/Estrategia-comercial.png";
-
-// import { Save, Printer, FileText } from "lucide-react";
-// import InputGroup from "./InputGroup";
-
-// export default function InvoiceGenerator({
-//   materials = [],
-//   paymentTypes = [],
-//   onSave,
-// }) {
-//   // estado base (campos generales)
-//   const [formData, setFormData] = useState({
-//     fecha: new Date().toISOString().split("T")[0],
-//     remision: "131957",
-//     conductor: "",
-//     cedula: "",
-//     tercero: "",
-//     telefono: "",
-//     direccion: "",
-//     placa: "",
-//     incluirIva: false,
-//     incluirRet: false,
-//     tipoPago:
-//       paymentTypes.length > 0
-//         ? paymentTypes[0].tipo_pago ?? paymentTypes[0].name
-//         : "Efectivo",
-//     observacion: "",
-//     horaLlegada: new Date().toLocaleTimeString("en-US", {
-//       hour: "2-digit",
-//       minute: "2-digit",
-//       hour12: false,
-//     }),
-//     horaSalida: "",
-//   });
-
-//   // cada elemento de esta lista representa una fila (material) en la remisión
-//   const [lineItems, setLineItems] = useState(() => {
-//     // inicial con un item vacío o con el primer material si existe
-//     if (materials.length > 0) {
-//       const m = materials[0];
-//       return [
-//         {
-//           id: Date.now(),
-//           idMaterial: m.idMaterial,
-//           nombre_material: m.nombre_material,
-//           cantidad: 0,
-//           precioUnitario: m.precio ?? m.precioUnitario ?? 0,
-//         },
-//       ];
-//     }
-//     return [
-//       {
-//         id: Date.now(),
-//         idMaterial: null,
-//         nombre_material: "",
-//         cantidad: 0,
-//         precioUnitario: 0,
-//       },
-//     ];
-//   });
-
-//   const [calculos, setCalculos] = useState({
-//     subtotal: 0,
-//     iva: 0,
-//     retencion: 0,
-//     total: 0,
-//   });
-
-//   // si cambia la lista de materials, actualizamos la primer línea si estaba vacía
-//   useEffect(() => {
-//     setLineItems((prev) => {
-//       // si primer item no tiene idMaterial y materials trae algo, rellenarlo
-//       if (prev.length === 1 && !prev[0].idMaterial && materials.length > 0) {
-//         const m = materials[0];
-//         return [
-//           {
-//             ...prev[0],
-//             idMaterial: m.idMaterial,
-//             nombre_material: m.nombre_material,
-//             precioUnitario: m.precio ?? 0,
-//           },
-//         ];
-//       }
-//       return prev;
-//     });
-//   }, [materials]);
-
-//   // recalcular totales cuando cambian lineItems o flags
-//   useEffect(() => {
-//     const subtotal = lineItems.reduce((acc, li) => {
-//       const c = parseFloat(li.cantidad) || 0;
-//       const p = parseFloat(li.precioUnitario) || 0;
-//       return acc + c * p;
-//     }, 0);
-//     const iva = formData.incluirIva ? subtotal * 0.19 : 0;
-//     const retencion = formData.incluirRet ? subtotal * 0.025 : 0;
-//     setCalculos({
-//       subtotal,
-//       iva,
-//       retencion,
-//       total: subtotal + iva - retencion,
-//     });
-//   }, [lineItems, formData.incluirIva, formData.incluirRet]);
-
-//   // cambios en inputs generales (fecha, tercero, flags, tipoPago, etc.)
-//   const handleChange = (e) => {
-//     const { name, value, type, checked } = e.target;
-//     setFormData((prev) => ({
-//       ...prev,
-//       [name]: type === "checkbox" ? checked : value,
-//     }));
-//   };
-
-//   // cambios en una fila (line item)
-//   const handleLineChange = (index, field, value) => {
-//     setLineItems((prev) =>
-//       prev.map((li, i) => {
-//         if (i !== index) return li;
-//         // si cambian el material, rellenar id,nombre,precio automáticamente
-//         if (field === "idMaterial" || field === "nombre_material") {
-//           // si se recibió idMaterial (select por id), buscar por id; si se recibió nombre, buscar por nombre
-//           let selected = null;
-//           if (field === "idMaterial") {
-//             const idNum = Number(value);
-//             selected = materials.find((m) => Number(m.idMaterial) === idNum);
-//             if (selected) {
-//               return {
-//                 ...li,
-//                 idMaterial: selected.idMaterial,
-//                 nombre_material: selected.nombre_material,
-//                 precioUnitario: selected.precio ?? li.precioUnitario,
-//               };
-//             } else {
-//               // si no encuentra, solo setear idMaterial
-//               return { ...li, idMaterial: value };
-//             }
-//           } else {
-//             // cambio por nombre (por compatibilidad)
-//             selected = materials.find((m) => m.nombre_material === value);
-//             if (selected) {
-//               return {
-//                 ...li,
-//                 idMaterial: selected.idMaterial,
-//                 nombre_material: selected.nombre_material,
-//                 precioUnitario: selected.precio ?? li.precioUnitario,
-//               };
-//             } else {
-//               return { ...li, nombre_material: value };
-//             }
-//           }
-//         }
-
-//         // Cambios en cantidad o precioUnitario
-//         if (field === "cantidad") {
-//           return { ...li, cantidad: value === "" ? "" : Number(value) };
-//         }
-//         if (field === "precioUnitario") {
-//           return { ...li, precioUnitario: value === "" ? "" : Number(value) };
-//         }
-
-//         return { ...li, [field]: value };
-//       })
-//     );
-//   };
-
-//   const addLine = () => {
-//     const newLine = {
-//       id: Date.now() + Math.random(),
-//       idMaterial: materials.length > 0 ? materials[0].idMaterial : null,
-//       nombre_material: materials.length > 0 ? materials[0].nombre_material : "",
-//       cantidad: 0,
-//       precioUnitario: materials.length > 0 ? materials[0].precio ?? 0 : 0,
-//     };
-//     setLineItems((prev) => [...prev, newLine]);
-//   };
-
-//   const removeLine = (index) => {
-//     setLineItems((prev) => {
-//       if (prev.length === 1) {
-//         // si queda vacía, reseteamos la fila en lugar de eliminarla para mantener UI
-//         const single = [
-//           {
-//             id: Date.now(),
-//             idMaterial: null,
-//             nombre_material: "",
-//             cantidad: 0,
-//             precioUnitario: 0,
-//           },
-//         ];
-//         return single;
-//       }
-//       return prev.filter((_, i) => i !== index);
-//     });
-//   };
-
-//   // Guardar / enviar remisión
-//   const handleSaveInternal = () => {
-//     // validaciones básicas: cliente y al menos una cantidad > 0
-//     const anyCantidad = lineItems.some(
-//       (li) => (parseFloat(li.cantidad) || 0) > 0
-//     );
-//     if (!formData.tercero || !anyCantidad) {
-//       alert(
-//         "Asegúrate de ingresar Cliente/Tercero y al menos una Cantidad mayor a 0 en los materiales."
-//       );
-//       return;
-//     }
-
-//     // construir payload con la lista de materiales según formato C (ID + nombre + precio + cantidad)
-//     const materialesPayload = lineItems.map((li) => ({
-//       idMaterial: li.idMaterial ?? null,
-//       nombre_material: li.nombre_material ?? "",
-//       cantidad: Number(li.cantidad) || 0,
-//       precioUnitario: Number(li.precioUnitario) || 0,
-//     }));
-
-//     const fullRecord = {
-//       id: Date.now(),
-//       ...formData,
-//       materiales: materialesPayload,
-//       ...calculos,
-//     };
-
-//     // Llamada al callback onSave
-//     if (typeof onSave === "function") {
-//       onSave(fullRecord);
-//     }
-
-//     alert(
-//       `¡Remisión ${formData.remision} guardada en Movimientos exitosamente!`
-//     );
-
-//     // Después de guardar, aumentamos consecutivo y reseteamos cantidades/observación
-//     setFormData((prev) => ({
-//       ...prev,
-//       remision: (parseInt(prev.remision, 10) + 1).toString(),
-//       observacion: "",
-//     }));
-
-//     // Resetear lineItems: mantenemos la misma estructura pero cantidades en 0
-//     setLineItems((prev) =>
-//       prev.map((li, i) => ({
-//         ...li,
-//         cantidad: 0,
-//       }))
-//     );
-//   };
-
-//   const formatCurrency = (val) =>
-//     new Intl.NumberFormat("es-CO", {
-//       style: "currency",
-//       currency: "COP",
-//       minimumFractionDigits: 0,
-//       maximumFractionDigits: 0,
-//     }).format(val);
-
-//   return (
-//     <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
-//       {/* FORMULARIO */}
-//       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden sticky top-4">
-//         <div className="bg-linear-to-r from-gray-50 to-white px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-//           <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-//             <FileText size={18} className="text-emerald-600" /> Datos de
-//             Remisión
-//           </h2>
-//         </div>
-
-//         <div className="p-6 space-y-5">
-//           <div className="grid grid-cols-2 gap-4">
-//             <InputGroup
-//               label="Fecha"
-//               name="fecha"
-//               type="date"
-//               value={formData.fecha}
-//               onChange={(e) =>
-//                 handleChange({
-//                   target: { name: "fecha", value: e.target.value },
-//                 })
-//               }
-//             />
-//             <InputGroup
-//               label="No. Remisión"
-//               name="remision"
-//               value={formData.remision}
-//               onChange={(e) =>
-//                 handleChange({
-//                   target: { name: "remision", value: e.target.value },
-//                 })
-//               }
-//             />
-//           </div>
-
-//           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//             <InputGroup
-//               label="Conductor"
-//               name="conductor"
-//               value={formData.conductor}
-//               onChange={(e) => handleChange(e)}
-//             />
-//             <InputGroup
-//               label="Placa Vehículo"
-//               name="placa"
-//               value={formData.placa}
-//               onChange={(e) => handleChange(e)}
-//             />
-//           </div>
-
-//           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-//             <div className="md:col-span-2">
-//               <InputGroup
-//                 label="Cliente / Tercero"
-//                 name="tercero"
-//                 value={formData.tercero}
-//                 onChange={(e) => handleChange(e)}
-//               />
-//             </div>
-//             <InputGroup
-//               label="Teléfono"
-//               name="telefono"
-//               value={formData.telefono}
-//               onChange={(e) => handleChange(e)}
-//             />
-//           </div>
-
-//           <InputGroup
-//             label="Dirección"
-//             name="direccion"
-//             value={formData.direccion}
-//             onChange={(e) => handleChange(e)}
-//             tooltip="Hacia a donde se dirige la carga"
-//           />
-
-//           <div className="h-px bg-gray-200 my-2"></div>
-
-//           {/* --- Sección Materiales: múltiple filas --- */}
-//           <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-100">
-//             <div className="grid grid-cols-3 gap-4 items-end">
-//               <div className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
-//                 Material
-//               </div>
-//               <div className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
-//                 Cantidad (m³)
-//               </div>
-//               <div className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
-//                 Precio Unitario
-//               </div>
-//             </div>
-
-//             {lineItems.map((li, idx) => (
-//               <div key={li.id} className="grid grid-cols-3 gap-4 items-center">
-//                 {/* Select material */}
-//                 <div className="flex flex-col gap-1">
-//                   <select
-//                     name={`material-${idx}`}
-//                     value={li.idMaterial ?? li.nombre_material ?? ""}
-//                     onChange={(e) => {
-//                       // preferimos trabajar por idMaterial si el select usa id
-//                       const selectedId = e.target.value;
-//                       // si las opciones usan idMaterial como value, buscar por id
-//                       handleLineChange(idx, "idMaterial", selectedId);
-//                     }}
-//                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
-//                   >
-//                     <option value="">Seleccione un material</option>
-//                     {materials.map((m) => (
-//                       <option key={m.idMaterial} value={m.idMaterial}>
-//                         {m.nombre_material}
-//                       </option>
-//                     ))}
-//                   </select>
-//                 </div>
-
-//                 {/* Cantidad */}
-//                 <div>
-//                   <input
-//                     type="number"
-//                     min="0"
-//                     step="0.01"
-//                     name={`cantidad-${idx}`}
-//                     value={li.cantidad === "" ? "" : li.cantidad}
-//                     onChange={(e) =>
-//                       handleLineChange(idx, "cantidad", e.target.value)
-//                     }
-//                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
-//                     placeholder="..."
-//                   />
-//                 </div>
-
-//                 {/* Precio unitario + eliminar */}
-//                 <div className="flex gap-2 items-center">
-//                   <input
-//                     type="number"
-//                     min="0"
-//                     step="1"
-//                     name={`precioUnitario-${idx}`}
-//                     value={li.precioUnitario === "" ? "" : li.precioUnitario}
-//                     onChange={(e) =>
-//                       handleLineChange(idx, "precioUnitario", e.target.value)
-//                     }
-//                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
-//                     placeholder="..."
-//                   />
-//                   <button
-//                     type="button"
-//                     onClick={() => removeLine(idx)}
-//                     className="text-sm px-3 py-2 border border-red-200 text-red-600 rounded-md hover:bg-red-50"
-//                     title="Eliminar material"
-//                   >
-//                     ×
-//                   </button>
-//                 </div>
-//               </div>
-//             ))}
-
-//             <div className="flex justify-between items-center">
-//               <button
-//                 type="button"
-//                 onClick={addLine}
-//                 className="text-sm bg-transparent text-emerald-600 font-medium px-3 py-2 rounded-md hover:bg-emerald-50"
-//               >
-//                 + Agregar material
-//               </button>
-
-//               <div className="bg-emerald-50 p-3 rounded-lg w-full sm:w-auto min-w-[220px] border border-emerald-100 shadow-sm">
-//                 <div className="flex justify-between font-bold text-lg text-emerald-700">
-//                   <span>TOTAL:</span>
-//                   <span>{formatCurrency(calculos.total)}</span>
-//                 </div>
-//               </div>
-//             </div>
-//           </div>
-//           {/* --- Fin sección materiales --- */}
-
-//           {/* Totales Opcionales */}
-//           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-//             <div className="space-y-2 pt-2">
-//               <label className="flex items-center gap-2 cursor-pointer select-none">
-//                 <input
-//                   type="checkbox"
-//                   name="incluirIva"
-//                   checked={formData.incluirIva}
-//                   onChange={(e) => handleChange(e)}
-//                   className="rounded text-emerald-600 w-4 h-4"
-//                 />
-//                 <span className="text-sm text-gray-600">Incluir IVA (19%)</span>
-//               </label>
-//               <label className="flex items-center gap-2 cursor-pointer select-none">
-//                 <input
-//                   type="checkbox"
-//                   name="incluirRet"
-//                   checked={formData.incluirRet}
-//                   onChange={(e) => handleChange(e)}
-//                   className="rounded text-emerald-600 w-4 h-4"
-//                 />
-//                 <span className="text-sm text-gray-600">Incluir Retención</span>
-//               </label>
-//             </div>
-//           </div>
-
-//           {/* Horas y Tipo de Pago */}
-//           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-//             <InputGroup
-//               label="Hora Llegada"
-//               name="horaLlegada"
-//               type="time"
-//               value={formData.horaLlegada}
-//               onChange={(e) => handleChange(e)}
-//             />
-//             <InputGroup
-//               label="Hora Salida"
-//               name="horaSalida"
-//               type="time"
-//               value={formData.horaSalida}
-//               onChange={(e) => handleChange(e)}
-//             />
-
-//             <div className="col-span-2 flex flex-col gap-1">
-//               <label className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
-//                 Tipo Pago
-//               </label>
-//               <select
-//                 name="tipoPago"
-//                 value={formData.tipoPago}
-//                 onChange={(e) => handleChange(e)}
-//                 className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
-//               >
-//                 {paymentTypes.map((p) => (
-//                   <option
-//                     key={p.idTipoPago ?? p.id}
-//                     value={p.tipo_pago ?? p.name ?? p.tipoPago}
-//                   >
-//                     {p.tipo_pago ?? p.name ?? p.tipoPago}
-//                   </option>
-//                 ))}
-//               </select>
-//             </div>
-//           </div>
-
-//           <InputGroup
-//             label="Observaciones"
-//             name="observacion"
-//             value={formData.observacion}
-//             onChange={(e) => handleChange(e)}
-//           />
-
-//           <button
-//             onClick={handleSaveInternal}
-//             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer mt-4"
-//           >
-//             <Save size={20} /> Guardar y Registrar
-//           </button>
-//         </div>
-//       </div>
-
-//       {/* VISTA PREVIA */}
-//       <div className="flex flex-col gap-4">
-//         <div className="flex justify-between items-center px-1">
-//           <h3 className="font-bold text-gray-600 flex items-center gap-2">
-//             <Printer size={18} /> Vista Previa
-//           </h3>
-//           <button
-//             onClick={() => window.print()}
-//             className="text-sm bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors flex items-center gap-2 shadow-md"
-//           >
-//             <Printer size={16} /> Imprimir
-//           </button>
-//         </div>
-
-//         <div
-//           className="bg-white shadow-2xl p-8 min-h-[800px] text-xs md:text-sm text-black font-sans border border-gray-200 relative"
-//           id="invoice-print">
-//             <div className="border-2 border-black mb-4">
-//               {/* CONTENEDOR FLEX PARA LOGO + TEXTO */}
-//               <div className="flex items-center border-b-2 border-black bg-gray-50 p-3">
-
-//                 {/* LOGO IZQUIERDA */}
-//                 <img
-//                  src={LogoEmprecal}
-//                   alt="Logo Emprecal"
-//                  className="w-20 h-20 object-contain mr-4"
-//                 />
-
-//                 {/* TEXTO CENTRADO */}
-//                <div className="flex-1 text-center">
-//                  <div className="font-bold text-xl">
-//                     EMPRECAL S.A. NIT. 804.002.739-01
-//                   </div>
-//                   <div className="text-xs font-normal mt-1 text-gray-600">
-//                     Kilómetro 9 vía San Gil - Socorro | Cel. 3138880467
-//                   </div>
-//                 </div>
-
-//              </div>
-//             </div>
-//             <div className="grid grid-cols-2 divide-x-2 divide-black">
-//               <div className="p-3">
-//                 <div className="grid grid-cols-[70px_1fr] gap-y-2">
-//                   <span className="font-bold">Fecha:</span>
-//                   <span>{formData.fecha}</span>
-//                   <span className="font-bold">Señores:</span>
-//                   <span className="uppercase font-medium">
-//                     {formData.tercero || "................................"}
-//                   </span>
-//                   <span className="font-bold">Dirección:</span>
-//                   <span className="uppercase font-medium">
-//                     {formData.direccion || "................................"}
-//                   </span>
-//                   <span className="font-bold">Transp.:</span>
-//                   <span className="uppercase font-medium">
-//                     {formData.conductor || "................................"}
-//                   </span>
-//                   <span className="font-bold">Llegada:</span>
-//                   <span className="uppercase font-medium">
-//                     {formData.horaLlegada}
-//                   </span>
-//                   <span className="font-bold">Salida:</span>
-//                   <span className="uppercase font-medium">
-//                     {formData.horaSalida}
-//                   </span>
-//                 </div>
-//               </div>
-//               <div className="p-3 bg-gray-50">
-//                 <div className="grid grid-cols-[80px_1fr] gap-y-1 items-center">
-//                   <span className="font-bold text-right pr-3">REMISIÓN:</span>
-//                   <span className="font-bold text-red-600 text-xl font-mono tracking-widest">
-//                     {formData.remision}
-//                   </span>
-//                   <span className="font-bold text-right pr-3">Celular:</span>
-//                   <span>{formData.telefono}</span>
-//                   <span className="font-bold text-right pr-3">Placa:</span>
-//                   <span className="uppercase border-2 border-black px-2 py-0.5 inline-block text-center font-bold w-24 bg-white">
-//                     {formData.placa}
-//                   </span>
-//                   <span className="font-bold text-right pr-3">Pago:</span>
-//                   <span>{formData.tipoPago}</span>
-//                 </div>
-//               </div>
-//             </div>
-
-//           {/* Tabla de items con múltiples filas */}
-//           <div className="border-2 border-black mb-4">
-//             <div className="grid grid-cols-[80px_1fr_100px_100px] bg-gray-200 border-b-2 border-black font-bold text-center p-2 text-xs uppercase tracking-wider">
-//               <div>Cantidad</div>
-//               <div>Descripción</div>
-//               <div>Precio Unit.</div>
-//               <div>Total</div>
-//             </div>
-
-//             <div>
-//               {" "}
-//               {/* Div va a ir vacio para poner los materiales vendidos */}
-//               {lineItems.map((li, i) => {
-//                 const cantidad = Number(li.cantidad) || 0;
-//                 const precio = Number(li.precioUnitario) || 0;
-//                 const total = cantidad * precio;
-//                 return (
-//                   <div
-//                     key={li.id + "-preview"}
-//                     className="grid grid-cols-[80px_1fr_100px_100px] text-center p-1 content-start"
-//                   >
-//                     <div className="py-2 font-medium">
-//                       {cantidad > 0 ? cantidad : ""}
-//                     </div>
-//                     <div className="py-2 uppercase text-left px-4 font-medium">
-//                       {li.nombre_material || ""}
-//                     </div>
-//                     <div className="py-2 text-gray-600">
-//                       {precio > 0 ? formatCurrency(precio) : ""}
-//                     </div>
-//                     <div className="py-2 font-medium">
-//                       {total > 0 ? formatCurrency(total) : ""}
-//                     </div>
-//                   </div>
-//                 );
-//               })}
-//             </div>
-
-//             <div className="border-t-2 border-black text-sm">
-//               <div className="grid grid-cols-[1fr_120px]">
-//                 <div className="text-right pr-3 font-bold py-1 border-r-2 border-black bg-gray-50">
-//                   SUBTOTAL:
-//                 </div>
-//                 <div className="text-right pr-3 py-1 font-mono">
-//                   {formatCurrency(calculos.subtotal)}
-//                 </div>
-//               </div>
-
-//               {formData.incluirIva && (
-//                 <div className="grid grid-cols-[1fr_120px] border-t border-black">
-//                   <div className="text-right pr-3 font-bold py-1 border-r-2 border-black bg-gray-50">
-//                     IVA (19%):
-//                   </div>
-//                   <div className="text-right pr-3 py-1 font-mono">
-//                     {formatCurrency(calculos.iva)}
-//                   </div>
-//                 </div>
-//               )}
-
-//               {formData.incluirRet && (
-//                 <div className="grid grid-cols-[1fr_120px] border-t border-black">
-//                   <div className="text-right pr-3 font-bold py-1 border-r-2 border-black bg-gray-50">
-//                     RETENCIÓN:
-//                   </div>
-//                   <div className="text-right pr-3 py-1 font-mono">
-//                     {formatCurrency(calculos.retencion)}
-//                   </div>
-//                 </div>
-//               )}
-
-//               <div className="grid grid-cols-[1fr_120px] border-t-2 border-black bg-gray-200">
-//                 <div className="text-right pr-3 font-bold py-2 border-r-2 border-black text-base">
-//                   TOTAL A PAGAR:
-//                 </div>
-//                 <div className="text-right pr-3 py-2 font-bold text-base font-mono">
-//                   {formatCurrency(calculos.total)}
-//                 </div>
-//               </div>
-//             </div>
-//           </div>
-
-//           <div className="border-2 border-black p-3 min-h-[60px] rounded-sm mb-4">
-//             <span className="font-bold block text-xs uppercase text-gray-500">
-//               Obs:
-//             </span>{" "}
-//             <span className="italic">{formData.observacion}</span>
-//           </div>
-//           {/* SECCIÓN DE FIRMA (ALINEADA A LA DERECHA CON ESPACIO SUPERIOR) */}
-//           <div className="w-full mt-8 flex items-center gap-4 pr-70">
-//             <p className="font-bold uppercase tracking-wide whitespace-nowrap">
-//               Firma tercero:
-//             </p>
-//             <div className="flex-1 border-t-2 border-black"></div>
-//           </div>
-
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }

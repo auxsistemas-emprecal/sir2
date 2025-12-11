@@ -36,6 +36,32 @@ export const fetchMovimientos = async () => {
   }
 };
 
+// En apiService.js, agregar esta función:
+
+/**
+ * Obtiene el número de la última remisión para calcular el siguiente consecutivo.
+ * Endpoint: http://192.168.150.6:8000/movimientos/ultima
+ */
+export const fetchLastRemisionNumber = async () => {
+    try {
+        // 🛑 Usar el endpoint que especificaste
+        const response = await fetch(`${BASE_URL}/movimientos/ultima`, { 
+            headers: getAuthHeaders(),
+        });
+        
+        if (!response.ok) {
+            console.error(`Fallo al obtener el último consecutivo (Estatus: ${response.status})`);
+            return null; 
+        }
+        
+        return await response.json() 
+
+    } catch (error) {
+        console.error("Error obteniendo el último consecutivo:", error);
+        return null;
+    }
+};
+
 /**
  * @param {string|number} remision - El número de remisión.
  * @returns {Promise<object | null>} El objeto del movimiento o null si no se encuentra.
@@ -187,6 +213,46 @@ export const createMovimientoItem = async (item) => {
   }
   return await res.json();
 };
+
+
+
+/* ============================================================
+    (Función startEditing)
+   ============== ============================================== */
+
+/**
+ * Obtiene todos los ítems (materiales y cantidades) asociados a un número de remisión.
+ * @param {number} remision El número de remisión para filtrar los ítems.
+ * @returns {Promise<Array>} Lista de objetos de ítems de movimiento.
+ */
+export const fetchMovimientoItemsByRemision = async (remision) => {
+    try {
+        // const token = localStorage.getItem('token');
+        // if (!token) throw new Error("No hay token de autenticación.");
+
+        // 🛑 Reemplace '/movimientoItems/remision/' por la ruta REAL de su API
+        // Esta ruta debe devolver todos los ítems de la tabla MovimientoItems
+        const response = await fetch(`${BASE_URL}/movimientoItems/remision/${remision}`, {
+            method: 'GET',
+            headers: getAuthHeaders()
+            // headers: {
+            //     // 'Content-Type': 'application/json',
+            //     // 'Authorization': `Bearer ${token}`,
+            // },
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || `Error al obtener ítems de remisión ${remision}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("API Error - fetchMovimientoItemsByRemision:", error);
+        throw error;
+    }
+};
+
 
 /* ============================================================
    🟩 TERCEROS
@@ -422,7 +488,94 @@ export const deleteTipoPago = async (id) => {
   return await res.json();
 };
 
+/* ============================================================
+   ANTICIPOS (PAGOS)
+   ============================================================ */
 
+/**
+ * Obtiene todos los pagos registrados.
+ * Endpoint: GET /pagos
+ */
+export const fetchPagos = async () => {
+  try {
+    const res = await fetch(`${BASE_URL}/pagos`, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!res.ok) {
+        console.error(`Error ${res.status} al obtener pagos`);
+        return [];
+    }
+
+    const json = await res.json();
+    // El backend retorna { status: "success", data: [...] }
+    return Array.isArray(json.data) ? json.data : [];
+  } catch (error) {
+    console.error("Error obteniendo pagos:", error);
+    return [];
+  }
+};
+
+/**
+ * Crea un nuevo pago.
+ * Endpoint: POST /pagos
+ * @param {object} pago - Objeto con la estructura de PagoBase
+ */
+export const createPago = async (pago) => {
+  try {
+    const res = await fetch(`${BASE_URL}/pagos`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(pago),
+    });
+
+    // Retornamos la respuesta completa para manejar status: "success" o "error" en el front
+    return await res.json();
+  } catch (error) {
+    console.error("Error creando pago:", error);
+    throw error;
+  }
+};
+
+/**
+ * Actualiza un pago existente.
+ * Endpoint: PUT /pagos/{id_pago}
+ * @param {number} id - ID del pago a actualizar
+ * @param {object} pago - Datos actualizados
+ */
+export const updatePago = async (id, pago) => {
+  try {
+    const res = await fetch(`${BASE_URL}/pagos/${id}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(pago),
+    });
+
+    return await res.json();
+  } catch (error) {
+    console.error(`Error actualizando pago ${id}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Elimina un pago.
+ * Endpoint: DELETE /pagos/{id_pago}
+ * @param {number} id - ID del pago a eliminar
+ */
+export const deletePago = async (id) => {
+  try {
+    const res = await fetch(`${BASE_URL}/pagos/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+
+    return await res.json();
+  } catch (error) {
+    console.error(`Error eliminando pago ${id}:`, error);
+    throw error;
+  }
+};
 
 
 
