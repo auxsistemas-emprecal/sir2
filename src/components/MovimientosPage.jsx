@@ -12,7 +12,7 @@ import MovimientosTable from "./MovimientosTable";
 
 
 import { 
-    // fetchMovimientos, // 🛑 ELIMINADA: La carga inicial ahora la hace App.jsx
+    // fetchMovimientos, 
     updateMovimientoStatus // Función para cambiar el estado (VIGENTE/CANCELADO)
 } from '../assets/services/apiService'; 
 
@@ -33,20 +33,14 @@ const ESTADO_OPCIONES = [
     { value: "ANULADA", label: "Anulada" },
 ];
 
-// 🛑 ACEPTAMOS LAS PROPS 'data' y 'onRefresh' de App.jsx
+//  ACEPTAMOS LAS PROPS 'data' y 'onRefresh' de App.jsx
 export default function MovimientosPage({ data = [], onRefresh, onEdit, changeTab }) {
     // --- Estados Principales ---
-    // 🛑 ELIMINAMOS EL ESTADO LOCAL DE MOVIMIENTOS
-    // const [movimientos, setMovimientos] = useState([]); 
-    const movimientos = data; // 🛑 Ahora 'movimientos' es simplemente la prop 'data'
-
-    // const navigate = useNavigate();
-
+    const movimientos = data; 
     // El estado de loading y error se maneja en App.jsx para la carga inicial.
-    // Lo dejamos para propósitos de la edición o si la carga es asíncrona dentro del componente.
     const [loading, setLoading] = useState(false); // Lo establecemos en false por defecto.
     const [error, setError] = useState(null);
-    // 🆕 ESTADO DE MENSAJES: Para mostrar feedback al usuario.
+    // ESTADO DE MENSAJES: Para mostrar feedback al usuario.
     const [statusMessage, setStatusMessage] = useState({ message: null, type: null }); 
 
     // --- Estados de Filtro existentes ---
@@ -56,6 +50,8 @@ export default function MovimientosPage({ data = [], onRefresh, onEdit, changeTa
     const [desde, setDesde] = useState("");
     const [hasta, setHasta] = useState("");
     const [tercero, setTercero] = useState("");
+    const [cedulaCliente, setCedulaCliente] = useState(""); 
+    const [telefonoCliente, setTelefonoCliente] = useState("");
     const [tipoPago, setTipoPago] = useState(""); 
     const [estado, setEstado] = useState(""); 
     const [noIngreso, setNoIngreso] = useState("");
@@ -74,15 +70,6 @@ export default function MovimientosPage({ data = [], onRefresh, onEdit, changeTa
     }, [statusMessage.message]);
 
     // ===================================
-    // 🛑 Lógica principal de carga de datos (ELIMINADA / SUSTITUIDA)
-    // ===================================
-    // Eliminamos: fetchMovimientosData y el useEffect que la llama.
-    /*
-    const fetchMovimientosData = async () => { ... }
-    useEffect(() => { fetchMovimientosData(); }, []);
-    */
-
-    // ===================================
     // 🔵 Lógica de Filtrado (useMemo)
     // ===================================
     const filteredMovimientos = useMemo(() => {
@@ -92,10 +79,14 @@ export default function MovimientosPage({ data = [], onRefresh, onEdit, changeTa
         if (searchRemision) result = result.filter(x => String(x.remision).includes(searchRemision));
         if (placa) result = result.filter(x => (x.placa || "").toLowerCase().includes(placa.toLowerCase()));
         if (conductor) result = result.filter(x => (x.conductor || "").toLowerCase().includes(conductor.toLowerCase()));
+        
 
         // Filtros (Texto e Inputs)
         if (tercero) result = result.filter(x => (x.tercero || "").toLowerCase().includes(tercero.toLowerCase()));
+        if (cedulaCliente) result = result.filter(x => (x.cedula || x.cedula_cliente || "").toLowerCase().includes(cedulaCliente.toLowerCase()));
+        if (telefonoCliente) result = result.filter(x => (x.telefono || x.telefono_cliente || "").toLowerCase().includes(telefonoCliente.toLowerCase()));
         if (noIngreso) result = result.filter(x => (x.no_ingreso || "").toLowerCase().includes(noIngreso.toLowerCase()));
+
 
         // Filtros (Selects)
         if (tipoPago) result = result.filter(x => (x.tipo_pago || "").toUpperCase() === tipoPago.toUpperCase());
@@ -129,7 +120,7 @@ export default function MovimientosPage({ data = [], onRefresh, onEdit, changeTa
         try {
             await updateMovimientoStatus(remision, newState); 
             
-            // 🛑 LLAMAMOS A LA FUNCIÓN DE RECARGA DEL PADRE (App.jsx)
+            // FUNCIÓN DE RECARGA DEL PADRE (App.jsx)
             if (onRefresh) {
                 await onRefresh(); 
             } else {
@@ -168,50 +159,6 @@ const handleEdit = (movimiento) => {
         }
     };
 
-
-// ------------------------------------------------------------------------------------
-// Función para manejar la acción de editar
-// const handleEdit = (movimiento) => {
-//         alert(`Preparando edición de la remisión: ${movimiento.remision}.`);
-
-//         try {
-//             // 1. Almacenar los datos completos de la remisión
-//             localStorage.setItem('remision_a_editar', JSON.stringify(movimiento));
-//             console.log(`Datos de la remisión ${movimiento.remision} almacenados para edición.`);
-//         } catch (error) {
-//             console.error("Error al almacenar datos en localStorage:", error);
-//             alert("Error al preparar la edición. Por favor, inténtelo de nuevo.");
-//             return;
-//         }
-//         if (changeTab) {
-//             changeTab("generador"); 
-//         } else {
-//             console.error("Error: changeTab no está definida.");
-//         }
-
-//         const remisionGuardada = localStorage.getItem('remision_a_editar');
-
-// if (remisionGuardada) {
-//     try {
-//         const objetoRemision = JSON.parse(remisionGuardada);
-//         console.log("--- Contenido de la Remisión en localStorage ---");
-//         console.log(objetoRemision); 
-//         console.log("----------------------------------------------");
-//     } catch (e) {
-//         console.error("Error al parsear el JSON:", e);
-//     }
-//     }
-
-
-//         // changeTab("generador")
-//     };
-
-
-    // 🛑 ELIMINAMOS EL CHEQUEO DE LOADING/ERROR INICIALES (Ahora App.jsx lo maneja)
-    // if (loading) return (<div className="p-6"><p className="text-center text-gray-600">Cargando movimientos...</p></div>);
-    // if (error) return (<div className="p-6"><p className="text-center text-red-600">⚠️ Error: {error}</p></div>);
-
-
     return (
         <div className="p-6">
             <h1 className="text-2xl font-bold mb-4 text-gray-800">Gestión de Movimientos</h1>
@@ -228,7 +175,6 @@ const handleEdit = (movimiento) => {
             )}
             {/* FIN BLOQUE DE MENSAJE DE ESTADO */}
 
-            {/* Filtros (Se mantienen) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg shadow-sm mb-6">
                 {/* Inputs de filtro... */}
                 <input className="border p-2 rounded" placeholder="Remisión" value={searchRemision} onChange={e => setSearchRemision(e.target.value)} />

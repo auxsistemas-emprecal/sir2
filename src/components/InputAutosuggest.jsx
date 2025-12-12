@@ -15,21 +15,17 @@ function InputAutosuggest({
   itemsKeys = "id_tercero",
 }) {
   const [tercerosSuggest, setTercerosSuggest] = useState([]);
-
-  const searchValues = async (query = "") => {
-    return await searchEndpoint(query);
-  };
+  const [globalValue, setGlobalValue] = useState("");
 
   useEffect(() => {
     (async () => {
-      const temporal = await searchEndpoint("");
+      const temporal = await searchEndpoint(globalValue);
       setTercerosSuggest(temporal);
     })();
-  }, []);
+  }, [globalValue]);
 
   const handleSelection = (e = "") => {
     if (!e) return;
-
     onChange({
       target: {
         name,
@@ -56,6 +52,7 @@ function InputAutosuggest({
         itemToString={(item) => (item ? item[textSuggestor] : "")}
         onChange={handleSelection}
         onInputValueChange={(val) => {
+          setGlobalValue(val);
           onChange({
             target: {
               name,

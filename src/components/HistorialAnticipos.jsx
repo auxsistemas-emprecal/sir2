@@ -1,28 +1,37 @@
 import React, { useEffect, useState } from "react";
-import AnticiposArchived from "./AnticiposArchived.jsx"; // Asegúrate de la ruta correcta
+import AnticiposArchived from "./AnticiposArchived.jsx"; 
 import {
   fetchPagos,
-  fetchTerceros,
   fetchTiposPago,
-} from "../assets/services/apiService.js"; // Ajusta la ruta a tu servicio
+  searchTercero
+} from "../assets/services/apiService.js"; 
 
-export default function HistorialAnticipos() {
+
+export default function HistorialAnticipos({ toggleAnticipoEstado }) {
   const [pagosFormateados, setPagosFormateados] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+
 
   useEffect(() => {
     const cargarDatos = async () => {
       try {
         setLoading(true);
         // 1. Llamamos a todas las APIs necesarias en paralelo
-        const [pagosData, tercerosData, tiposPagoData] = await Promise.all([
+        const [pagosData, tiposPagoData] = await Promise.all([
           fetchPagos(),
-          fetchTerceros(),
           fetchTiposPago(),
         ]);
 
+        const idsTterceros = [
+          ...new Set(pagosData.map((pago) => pago.idTercero)),
+        ];
+
+        const tercerosPromises = idsTterceros.map((id) => searchTercero(id));
+        const tercerosResults = await Promise.all(tercerosPromises);
+        const tercerosData = tercerosResults.map((res) => res[0]);
+
         // 2. Mapeamos los datos para que coincidan con lo que espera tu componente visual
-        // La API devuelve campos como 'id_pago', 'idTercero', pero tu componente quiere 'id', 'tercero'
         const datosProcesados = pagosData.map((pago) => {
           // Buscar el nombre del tercero por su ID
           const terceroEncontrado = tercerosData.find(
@@ -35,6 +44,7 @@ export default function HistorialAnticipos() {
           );
 
           return {
+            estado: pago.estado || "VIGENTE",
             id: pago.id_pago, // Mapeo de DB a Componente
             fecha: pago.fecha ? pago.fecha.split("T")[0] : "", // Limpiar formato ISO si viene con hora
             noComprobante: pago.no_ingreso || "---",
@@ -68,7 +78,11 @@ export default function HistorialAnticipos() {
 
   return (
     <div className="p-4">
-      <AnticiposArchived data={pagosFormateados} />
+      <AnticiposArchived data={pagosFormateados} 
+      toggleAnticipoEstado={toggleAnticipoEstado}
+      />
     </div>
   );
 }
+
+

@@ -229,9 +229,6 @@ export const fetchMovimientoItemsByRemision = async (remision) => {
     try {
         // const token = localStorage.getItem('token');
         // if (!token) throw new Error("No hay token de autenticación.");
-
-        // 🛑 Reemplace '/movimientoItems/remision/' por la ruta REAL de su API
-        // Esta ruta debe devolver todos los ítems de la tabla MovimientoItems
         const response = await fetch(`${BASE_URL}/movimientoItems/remision/${remision}`, {
             method: 'GET',
             headers: getAuthHeaders()
@@ -540,20 +537,32 @@ export const createPago = async (pago) => {
 /**
  * Actualiza un pago existente.
  * Endpoint: PUT /pagos/{id_pago}
- * @param {number} id - ID del pago a actualizar
+ * @param {number} id_pago - ID del pago a actualizar
  * @param {object} pago - Datos actualizados
  */
-export const updatePago = async (id, pago) => {
+export const updatePago = async (id_pago, pago) => {
+  if (!id_pago) {
+    console.error("❌ ERROR: updatePago recibió id_pago = ", id_pago);
+    throw new Error("ID de pago inválido (id_pago es undefined o null)");
+  }
+
   try {
-    const res = await fetch(`${BASE_URL}/pagos/${id}`, {
+    const res = await fetch(`${BASE_URL}/pagos/${id_pago}`, {
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify(pago),
     });
 
+    // Si el servidor responde con 422 o 400, mostrar el body para entender el error
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error("❌ Error del servidor:", errorBody);
+      throw new Error("La API rechazó la actualización del pago.");
+    }
+
     return await res.json();
   } catch (error) {
-    console.error(`Error actualizando pago ${id}:`, error);
+    console.error(`❌ Error actualizando pago ${id_pago}:`, error);
     throw error;
   }
 };

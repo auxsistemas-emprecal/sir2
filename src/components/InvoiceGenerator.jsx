@@ -12,6 +12,7 @@ import {
   fetchPreciosEspeciales,
   fetchMateriales,
   fetchLastRemisionNumber, // 🛑 Importar la nueva función
+  fetchMovimiento,
 } from "../assets/services/apiService";
 
 // --- Nuevo Componente: Modal de Confirmación ---
@@ -60,10 +61,11 @@ export default function InvoiceGenerator({
   //  RECIBE DATOS DE EDICIÓN
   editingMovement,
   editingItems,
+  isEditing,
+  setIsEditing,
 }) {
-
   // 🛑 MODIFICACIÓN 1: Nuevo estado para guardar el número de remisión
-    const [nextRemisionNumber, setNextRemisionNumber] = useState(null);
+  const [nextRemisionNumber, setNextRemisionNumber] = useState(null);
 
   const defaultPaymentType =
     paymentTypes.length > 0
@@ -76,7 +78,7 @@ export default function InvoiceGenerator({
     conductor: "",
     cedula: "",
     tercero: "",
-    idTercero: null, // <--- 🛑 NUEVO: Para guardar el ID del cliente
+    idTercero: null,
     telefono: "",
     direccion: "",
     placa: "",
@@ -121,9 +123,6 @@ export default function InvoiceGenerator({
     ];
   };
 
-  // Estados
-  const [isEditing, setIsEditing] = useState(false);
-
   const [formData, setFormData] = useState(initialFormData);
   const [lineItems, setLineItems] = useState(initialLineItems);
   const [calculos, setCalculos] = useState({
@@ -142,62 +141,71 @@ export default function InvoiceGenerator({
   const [preciosEspeciales, setPreciosEspeciales] = useState([]);
   // ----------------------
 
+  //=====================================================================================
+  //                                EDITAR
+  //======================================================================================
   useEffect(() => {
-    // 1. Verificar que estamos en modo edición y que los datos existen
-    if (editingMovement && editingItems.data.length > 0) {
-      console.log(
-        "Modo Edición: Inicializando formulario con datos compartidos."
-      );
-      console.log(editingMovement);
-      console.log(editingItems);
-      // -----------------------------------------------------------
-      // A. Inicializar la Cabecera (formData)
-      // -----------------------------------------------------------
-      setFormData(() => {
-        const [fecha, hora] = editingMovement.fecha.split("T");
+    (async () => {
+      // 1. Verificar que estamos en modo edición y que los datos existen
+      if (editingMovement && editingItems.data.length > 0) {
+        console.log(
+          "Modo Edición: Inicializando formulario con datos compartidos."
+        );
 
-        return {
-          // Mantenemos las claves de la cabecera que vienen de la prop
-          ...editingMovement,
+        const responseMovimiento = await fetchMovimiento(
+          editingMovement.remision
+        );
 
-          // 💡 IMPORTANTE: Mapeo de valores si es necesario.
-          // Los checkboxes (incluirIva/Ret) a menudo vienen como números (1/0) o booleanos (true/false) desde la API.
-          // Asegúrese de que coincidan con lo que espera su formulario.
-          incluirIva: editingMovement.incluyeIva === 1,
-          incluirRet: editingMovement.incluyeRetencion === 1,
-          fecha: fecha,
-          horaLlegada: hora.substring(0, 5),
-          // Asegurarse de que el ID del tercero sea numérico si su campo lo requiere
-          idTercero: parseInt(editingMovement.idTercero),
+        // -----------------------------------------------------------
+        // A. Inicializar la Cabecera (formData) Editar
+        // -----------------------------------------------------------
+        if (!isEditing) return;
+        setFormData(() => {
+          const [fecha, hora] = editingMovement.fecha.split("T");
 
-          // Si tiene un campo 'date', asegúrese de que el formato sea el correcto para el input.
-        };
-      });
+          const toReturn = {
+            // Mantenemos las claves de la cabecera que vienen de la prop
+            ...editingMovement,
 
-      // -----------------------------------------------------------
-      // B. Inicializar los Ítems (lineItems)
-      // -----------------------------------------------------------
-      // Mapeamos los ítems detallados para asegurarnos de que los valores numéricos
-      // (cantidad, precio) sean Strings, si sus inputs esperan strings.
-      const mappedItems = editingItems.data.map((item) => ({
-        ...item,
-        // Aseguramos que los valores que van a los inputs de texto sean strings
-        cantidad: String(item.cantidad),
-        precioUnitario: String(item.precioUnitario),
+            // Mapeo de valores si es necesario.
+            idTercero: parseInt(responseMovimiento.idTercero),
+            idTipoPago: parseInt(responseMovimiento.idTipoPago),
+            incluirIva: Boolean(editingMovement.incluir_iva),
+            incluirRet: Boolean(editingMovement.incluir_ret),
+            fecha: fecha,
+            horaLlegada: hora.substring(0, 5),
 
-        // Si necesita el nombre del material, lo puede añadir aquí
-        // nombreMaterial: item.nombreMaterial // Asumiendo que viene en la prop o lo puede buscar
-      }));
+            // Si tiene un campo 'date', asegúrese de que el formato sea el correcto para el input.
+          };
 
-      setLineItems(mappedItems);
-    } else {
-      // 🛑 Lógica para LIMPIAR al salir de la edición
-      // Si no hay datos de edición, resetear a los valores iniciales por defecto.
-      // Esto es crucial cuando se pasa de EDITAR a CREAR una nueva remisión.
-      // (Asumiendo que tiene un initialFormData y un initialLineItems o [] para el reset)
-      setFormData(initialFormData);
-      setLineItems([]);
-    }
+          return toReturn;
+        });
+
+        // -----------------------------------------------------------
+        // B. Inicializar los Ítems (lineItems)
+        // -----------------------------------------------------------
+        // Mapeamos los ítems detallados para asegurarnos de que los valores numéricos
+        // (cantidad, precio) sean Strings, si sus inputs esperan strings.
+        const mappedItems = editingItems.data.map((item) => ({
+          ...item,
+          // Aseguramos que los valores que van a los inputs de texto sean strings
+          cantidad: String(item.cantidad),
+          precioUnitario: String(item.precioUnitario),
+
+          // Si necesita el nombre del material, lo puede añadir aquí
+          // nombreMaterial: item.nombreMaterial // Asumiendo que viene en la prop o lo puede buscar
+        }));
+
+        setLineItems(mappedItems);
+      } else {
+        // 🛑 Lógica para LIMPIAR al salir de la edición
+        // Si no hay datos de edición, resetear a los valores iniciales por defecto.<
+        // Esto es crucial cuando se pasa de EDITAR a CREAR una nueva remisión.
+        // (Asumiendo que tiene un initialFormData y un initialLineItems o [] para el reset)
+        setFormData(initialFormData);
+        setLineItems([]);
+      }
+    })();
   }, [editingMovement, editingItems]);
 
   // si cambia la lista de materials, actualizamos la primer línea si estaba vacía
@@ -243,14 +251,16 @@ export default function InvoiceGenerator({
     });
   }, [lineItems, formData.incluirIva, formData.incluirRet]);
 
-  // cambios en inputs generales (fecha, tercero, flags, tipoPago, etc.)
   const handleChange = (e) => {
     const { name, value, type, checked, completeObject } = e.target;
+
+    // 1. Lógica para el Tercero (InputAutosuggest)
     if (name == "tercero" && typeof completeObject == "object") {
       setFormData((prev) => ({
         ...prev,
         conductor: completeObject.conductor,
         cedula: completeObject.cedula,
+        // CORRECCIÓN AQUÍ: Usar directamente el id del objeto seleccionado
         idTercero: completeObject.id_tercero,
         tercero: completeObject.nombre,
         telefono: completeObject.telefono,
@@ -259,15 +269,18 @@ export default function InvoiceGenerator({
       }));
       return;
     } else if (name == "tercero") {
+      // Si el usuario escribe manualmente y no selecciona de la lista,
+      // mantenemos el texto pero limpiamos el ID para evitar inconsistencias
       setFormData((prev) => ({
         ...prev,
         tercero: value,
+        // Opcional: idTercero: null (si quieres forzar selección de lista)
       }));
     }
 
-    // 🛑 Manejo de TIPO DE PAGO
+    // 2. Lógica para Tipo de Pago
     if (name === "tipoPago") {
-      // Buscar el ID en la lista de tipos de pago que se recibe por props
+      // Buscar el ID en la lista de tipos de pago
       const selectedPayment = paymentTypes.find(
         (p) => (p.tipo_pago || p.name) === value
       );
@@ -275,16 +288,20 @@ export default function InvoiceGenerator({
       setFormData((prev) => ({
         ...prev,
         tipoPago: value,
-        idTipoPago: selectedPayment?.idTipoPago || null, // Guardamos el ID
+        // CORRECCIÓN AQUÍ: Usar el ID del pago encontrado
+        idTipoPago: selectedPayment?.idTipoPago || selectedPayment?.id || null,
       }));
-      return; // Detener aquí si es tipoPago
+      return;
     }
+
+    // 3. Inputs normales
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
-  };
 
+    console.log(formData);
+  };
   // cambios en una fila (line item)
   const handleLineChange = (index, field, value) => {
     setLineItems((prev) =>
@@ -385,136 +402,6 @@ export default function InvoiceGenerator({
     setShowModal(true);
   };
 
-  //---------------------------------------------------------------------------------------
-  //
-  //-------------------------------------------------------------------------------------
-  // // --- NUEVA FUNCIÓN: Confirmar guardado (se llama desde el modal) ---
-  // const handleConfirmSave = () => {
-  //   setShowModal(false); // Cerramos el modal
-
-  //   // construir payload con la lista de materiales según formato C (ID + nombre + precio + cantidad)
-  //   const materialesPayload = lineItems.map((li) => ({
-  //     idMaterial: li.idMaterial ?? null,
-  //     nombre_material: li.nombre_material ?? "",
-  //     cantidad: Number(li.cantidad) || 0,
-  //     precioUnitario: Number(li.precioUnitario) || 0,
-  //   }));
-
-  //   const fullRecord = {
-  //     ...formData,
-  //     materiales: materialesPayload,
-  //     ...calculos,
-  //   };
-  //   console.log(fullRecord);
-  //   // Almacenar el registro antes de incrementar/resetear
-  //   setLastSavedRecord(fullRecord);
-
-  //   // Llamada al callback onSave
-  //   if (typeof onSave === "function") {
-  //     onSave(fullRecord);
-  //   }
-
-  //   // Después de guardar, aumentamos consecutivo y reseteamos cantidades/observación
-  //   setFormData((prev) => {
-  //     // Intentar parsear el número de remisión
-  //     const nextRemisionNumber = parseInt(prev.remision, 10);
-  //     const nextRemision = isNaN(nextRemisionNumber)
-  //       ? prev.remision // Si no es un número, mantenerlo
-  //       : (nextRemisionNumber + 1).toString(); // Si es un número, incrementar
-  //     return {
-  //       ...prev,
-  //       remision: nextRemision,
-  //       observacion: "",
-  //       conductor: "", // También resetear conductor, placa, tercero, teléfono, dirección
-  //       placa: "",
-  //       tercero: "",
-  //       telefono: "",
-  //       direccion: "",
-  //     };
-  //   });
-
-  //   // Resetear lineItems: mantenemos la misma estructura pero cantidades en 0
-  //   setLineItems(initialLineItems); // Usar la función de inicialización para resetear
-
-  //   // Mensaje de éxito
-  //   // alert(
-  //   //   `¡Remisión ${formData.remision} guardada en Movimientos exitosamente! Ahora puede imprimir.`
-  //   // );
-  // };
-  //--------------------------------------------------------------------------------------------------------
-  //
-  //--------------------------------------------------------------------------------------------------------
-
-  // --- NUEVA FUNCIÓN: Confirmar guardado (se llama desde el modal) ---
-  // const handleConfirmSave = async () => {
-  //   // 🛑 CAMBIO CLAVE: Se hace asíncrona
-  //   setShowModal(false); // Cerramos el modal
-
-  //   // construir payload con la lista de materiales según formato C (ID + nombre + precio + cantidad)
-  //   const materialesPayload = lineItems.map((li) => ({
-  //     idMaterial: li.idMaterial ?? null,
-  //     nombre_material: li.nombre_material ?? "",
-  //     cantidad: Number(li.cantidad) || 0,
-  //     precioUnitario: Number(li.precioUnitario) || 0,
-  //   }));
-
-  //   const fullRecord = {
-  //     ...formData,
-  //     materiales: materialesPayload,
-  //     ...calculos,
-  //   };
-  //   console.log(fullRecord);
-
-  //   try {
-  //     // 1. LLAMADA ASÍNCRONA A LA PROP `onSave`
-  //     // Esperamos la respuesta de la API.
-  //     const savedMovement = await onSave(fullRecord); // 🛑 CAMBIO CLAVE: Se usa await
-
-  //     // 2. MANEJO DE ÉXITO: Almacenar el registro y mostrar mensaje.
-  //     // Almacenar el registro para la vista/impresión (Esto solo se hace si el guardado es exitoso)
-  //     setLastSavedRecord(fullRecord);
-
-  //     alert(
-  //       `✅ Remisión ${
-  //         savedMovement?.remision || fullRecord.remision
-  //       } guardada exitosamente y movimientos actualizados.`
-  //     );
-
-  //     // 3. Después de guardar con éxito, aumentamos consecutivo y reseteamos formulario
-  //     setFormData((prev) => {
-  //       // Intentar parsear el número de remisión
-  //       const nextRemisionNumber = parseInt(prev.remision, 10);
-  //       const nextRemision = isNaN(nextRemisionNumber)
-  //         ? prev.remision // Si no es un número, mantenerlo
-  //         : (nextRemisionNumber + 1).toString(); // Si es un número, incrementar
-  //       return {
-  //         ...prev,
-  //         remision: nextRemision,
-  //         observacion: "",
-  //         conductor: "", // También resetear conductor, placa, tercero, teléfono, dirección
-  //         placa: "",
-  //         tercero: "",
-  //         telefono: "",
-  //         direccion: "",
-  //       };
-  //     });
-
-  //     // Resetear lineItems: mantenemos la misma estructura pero cantidades en 0
-  //     setLineItems(initialLineItems); // Usar la función de inicialización para resetear
-  //   } catch (error) {
-  //     // 4. MANEJO DE ERROR: Mostrar un mensaje detallado al usuario.
-  //     console.error("Fallo al guardar la remisión:", error);
-  //     alert(
-  //       `❌ Error al guardar la remisión: ${
-  //         error.message || "Error desconocido al conectar con la API."
-  //       }`
-  //     );
-  //     // Si falla, el formulario no se resetea para que el usuario pueda corregir y reintentar.
-  //   }
-  // };
-
-  // En InvoiceGenerator.jsx
-
   const handleConfirmSave = async () => {
     setShowModal(false);
 
@@ -525,51 +412,59 @@ export default function InvoiceGenerator({
 
     // 1. Construir el PAYLOAD DE LA CABECERA (/movimientos)
     // Se asegura snake_case y tipos correctos.
+    const fechaISO = new Date(
+      `${formData.fecha}T${formData.horaLlegada}:00`
+    ).toISOString();
+
+    
     const payloadHeader = {
       // Usamos fecha del form o actual
-      fecha: formData.fecha
-        ? new Date(formData.fecha).toISOString()
-        : new Date().toISOString(),
-
+      fecha: formData.fecha ? fechaISO : new Date().toISOString(),
+      
       // --- PREGUNTA 2: FORZAR PARSEINT ---
       remision: parseInt(formData.remision) || 0,
       idTercero: formData.idTercero ? parseInt(formData.idTercero) : 0,
       idTipoPago: formData.idTipoPago ? parseInt(formData.idTipoPago) : 0,
-
+      
       // Textos obligatorios (Strings)
       placa: formData.placa || "",
       direccion: formData.direccion || "",
       observacion: formData.observacion || "",
       conductor: formData.conductor || "",
-
+      cedula: formData.cedula || "",
+      telefono: formData.telefono || "",
+      
       // --- PREGUNTA 3.2: CAMPOS FALTANTES CON VALOR POR DEFECTO ---
       no_ingreso: "", // Valor por defecto string vacío
       estado: "VIGENTE", // Valor por defecto
       pagado: 0, // Valor por defecto int
       factura: 0, // Valor por defecto int
       cubicaje: totalCubicaje, // El valor calculado
-
+      
       // Totales calculados
       subtotal: Number(calculos.subtotal) || 0,
       iva: Number(calculos.iva) || 0,
       retencion: Number(calculos.retencion) || 0,
       total: Number(calculos.total) || 0,
-
+      
       // --- PREGUNTA 1: CAMBIAR NOMBRES (CamelCase a snake_case) ---
       incluir_iva: formData.incluirIva ? 1 : 0,
       incluir_ret: formData.incluirRet ? 1 : 0,
     };
-
+    
     // 🛑 DEBUG: Muestra el objeto que se va a enviar
-    console.log("PAYLOAD CABECERA A ENVIAR:", payloadHeader);
-
+    // console.log("PAYLOAD CABECERA A ENVIAR:", payloadHeader);
+    
     try {
       // 🛑 LLAMADA CLAVE: Se asume que App.jsx ya tiene la función addMovement actualizada.
       await onSave(payloadHeader, lineItems);
-
+      
       // --- LÓGICA DE ÉXITO ---
       setLastSavedRecord({ ...payloadHeader, materiales: lineItems });
-      alert(`✅ Remisión ${formData.remision} guardada exitosamente.`);
+      console.log("Datos originales de la remision:", editingMovement);
+      console.log("Ítems originales de la remision:", editingItems);
+      console.log("Datos de cabecera a enviar:", formData);
+      console.log("Items de materiales a enviar:", lineItems);
 
       // Reseteo del formulario
       setFormData((prev) => {
@@ -587,6 +482,7 @@ export default function InvoiceGenerator({
           idTercero: null,
           telefono: "",
           direccion: "",
+          cedula: "",
         };
       });
       setLineItems(initialLineItems);
@@ -742,13 +638,22 @@ export default function InvoiceGenerator({
                 />
               </div>
 
-              <InputGroup
-                label="Dirección"
-                name="direccion"
-                value={formData.direccion}
-                onChange={(e) => handleChange(e)}
-                tooltip="Hacia a donde se dirige la carga"
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <InputGroup
+                  label="Dirección"
+                  name="direccion"
+                  value={formData.direccion}
+                  onChange={(e) => handleChange(e)}
+                  tooltip="Hacia a donde se dirige la carga"
+                />
+
+                <InputGroup
+                  label="Cédula"
+                  name="cedula"
+                  value={formData.cedula}
+                  onChange={(e) => handleChange(e)}
+                />
+              </div>
 
               <div className="h-px bg-gray-200 my-2"></div>
 
@@ -941,9 +846,14 @@ export default function InvoiceGenerator({
               {/* El botón ahora llama a handleAttemptSave para mostrar el modal */}
               <button
                 onClick={handleAttemptSave}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer mt-4"
+                className={`w-full text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer mt-4 ${
+                  isEditing
+                    ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
+                    : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
+                }`}
               >
-                <Save size={20} /> Guardar y Registrar
+                <Save size={20} />{" "}
+                {isEditing ? "GUARDAR CAMBIOS" : "GUARDAR REMISIÓN"}
               </button>
             </>
           )}
@@ -1006,6 +916,10 @@ export default function InvoiceGenerator({
                 <span className="font-bold">Dirección:</span>
                 <span className="uppercase font-medium">
                   {previewData.direccion || "................................"}
+                </span>
+                <span className="font-bold">Cédula:</span>
+                <span className="uppercase font-medium">
+                  {previewData.cedula || "................................"}
                 </span>
                 <span className="font-bold">Transp.:</span>
                 <span className="uppercase font-medium">
