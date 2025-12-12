@@ -32,7 +32,7 @@ import {
   fetchPreciosEspeciales,
   createPago,
   fetchLastRemisionNumber,
-  fetchMovimientoItemsByRemision,// 🆕 Importado para edición
+  fetchMovimientoItemsByRemision, // 🆕 Importado para edición
 } from "./assets/services/apiService.js";
 
 export default function App() {
@@ -46,7 +46,6 @@ export default function App() {
   const [movements, setMovements] = useState([]);
   const [anticipos, setAnticipos] = useState([]);
   const [terceros, setTerceros] = useState([]);
-  const [preciosEspeciales, setPreciosEspeciales] = useState([]);
 
   // 🆕 ESTADOS PARA LA EDICIÓN
   const [editingMovement, setEditingMovement] = useState(null);
@@ -82,8 +81,7 @@ export default function App() {
         const tp = await fetchTiposPago();
         const ter = await fetchTerceros();
         const mat = await fetchMateriales();
-        const pla = await fetchPlacas();
-        const preEs = await fetchPreciosEspeciales();
+        // const pla = await fetchPlacas();
 
         // Cargar movimientos al inicio
         await loadMovimientos();
@@ -92,7 +90,6 @@ export default function App() {
         setPaymentTypes(tp);
         setTerceros(ter);
         setMaterials(mat);
-        setPreciosEspeciales(preEs);
         // setAnticipos(ant);
       } catch (error) {
         console.error("Error al cargar datos iniciales:", error);
@@ -155,7 +152,10 @@ export default function App() {
       //   );
       // }
       const remisionCreada = await fetchLastRemisionNumber();
-      console.log("2. Cabecera creada. Remisión ID:", remisionCreada.data[0].remision);
+      console.log(
+        "2. Cabecera creada. Remisión ID:",
+        remisionCreada.data[0].remision
+      );
 
       // PASO B: Recorrer los materiales y guardarlos uno por uno (/movimientoItems)
       for (const item of itemsList) {
@@ -278,18 +278,12 @@ export default function App() {
             />
           )}
 
-          {activeTab === "PreciosEspeciales" && (
-            <PreciosEspeciales
-              data={preciosEspeciales}
-              setData={setPreciosEspeciales}
-            />
-          )}
+          {activeTab === "PreciosEspeciales" && <PreciosEspeciales />}
         </div>
       </main>
     </div>
   );
 }
-
 
 // //========================11/12/25 ____ 10/00 =========================
 // // ======================= App.jsx (MODIFICADO) =======================

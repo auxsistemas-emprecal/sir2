@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { 
-  FileSpreadsheet, 
-  X, 
-  Search, 
-  Plus, 
-  Trash2, 
-  Pencil, 
-  AlertTriangle 
+import {
+  FileSpreadsheet,
+  X,
+  Search,
+  Plus,
+  Trash2,
+  Pencil,
+  AlertTriangle,
 } from "lucide-react";
 import {
   fetchPreciosEspeciales,
@@ -14,22 +14,23 @@ import {
   updatePrecioEspecial,
   searchTercero,
   searchMateriales,
-  deletePrecioEspecial
+  deletePrecioEspecial,
 } from "../assets/services/apiService.js";
 import InputAutosuggest from "./InputAutosuggest.jsx";
 
-export default function PreciosEspeciales({ data, setData }) {
+export default function PreciosEspeciales() {
   // Modales y Estados de UI
   const [showModal, setShowModal] = useState(false); // Editar
   const [showCreateModal, setShowCreateModal] = useState(false); // Crear
   const [showDeleteModal, setShowDeleteModal] = useState(false); // Eliminar (Nuevo)
-  
+
   // Datos y Formularios
   const [editingPrecio, setEditingPrecio] = useState(null);
   const [itemToDelete, setItemToDelete] = useState(null); // ID para eliminar
   const [formData, setFormData] = useState({});
   const [createForm, setCreateForm] = useState({});
   const [search, setSearch] = useState("");
+  const [data, setData] = useState([]);
   const [labels, setLabels] = useState({ tercero: "", material: "" });
 
   // Paginación
@@ -47,7 +48,8 @@ export default function PreciosEspeciales({ data, setData }) {
         lista[i]["nombreTercero"] = nombreTercero[0]?.nombre || "Desconocido";
 
         const nombreMaterial = await searchMateriales(row.idMaterial);
-        lista[i]["nombreMaterial"] = nombreMaterial[0]?.nombre_material || "Desconocido";
+        lista[i]["nombreMaterial"] =
+          nombreMaterial[0]?.nombre_material || "Desconocido";
       }
       setData(lista || []);
     })();
@@ -96,10 +98,12 @@ export default function PreciosEspeciales({ data, setData }) {
   const handleDeleteExecute = async () => {
     if (itemToDelete) {
       await deletePrecioEspecial(itemToDelete);
-      
+
       // Actualizar estado local para que desaparezca de la tabla inmediatamente
-      setData((prev) => prev.filter((item) => item.id_tercero_material !== itemToDelete));
-      
+      setData((prev) =>
+        prev.filter((item) => item.id_tercero_material !== itemToDelete)
+      );
+
       setShowDeleteModal(false);
       setItemToDelete(null);
     }
@@ -127,16 +131,24 @@ export default function PreciosEspeciales({ data, setData }) {
       if (selectedObj.hasOwnProperty("id_tercero")) {
         value = selectedObj.id_tercero;
         setLabels((prev) => ({ ...prev, tercero: selectedObj.nombre }));
-      } else if (selectedObj.hasOwnProperty("idMaterial")) { // Verifica key exacta de tu API
-        value = selectedObj.idMaterial; 
-        setLabels((prev) => ({ ...prev, material: selectedObj.nombre_material || selectedObj.material }));
+      } else if (selectedObj.hasOwnProperty("idMaterial")) {
+        // Verifica key exacta de tu API
+        value = selectedObj.idMaterial;
+        setLabels((prev) => ({
+          ...prev,
+          material: selectedObj.nombre_material || selectedObj.material,
+        }));
       }
     }
     setCreateForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const saveNewPrecio = async () => {
-    if (!createForm.id_tercero || !createForm.idMaterial || !createForm.precio) {
+    if (
+      !createForm.id_tercero ||
+      !createForm.idMaterial ||
+      !createForm.precio
+    ) {
       alert("Datos obligatorios incompletos.");
       return;
     }
@@ -145,7 +157,7 @@ export default function PreciosEspeciales({ data, setData }) {
     // o confiar en que el usuario refrescará. Por ahora insertamos raw data.
     const res = await createPrecioEspecial(createForm);
     const nuevo = res.data ?? createForm;
-    
+
     // Parche visual rápido: asignar los labels actuales al nuevo objeto para que se vean en la tabla
     nuevo.nombreTercero = labels.tercero;
     nuevo.nombreMaterial = labels.material;
@@ -163,7 +175,9 @@ export default function PreciosEspeciales({ data, setData }) {
     const term = search.toLowerCase();
     return (
       String(row.id_tercero).toLowerCase().includes(term) ||
-      String(row.nombreTercero || "").toLowerCase().includes(term) || // Busqueda por nombre también
+      String(row.nombreTercero || "")
+        .toLowerCase()
+        .includes(term) || // Busqueda por nombre también
       String(row.idMaterial).toLowerCase().includes(term) ||
       String(row.precio).includes(term)
     );
@@ -195,7 +209,10 @@ export default function PreciosEspeciales({ data, setData }) {
 
       {/* BUSCADOR */}
       <div className="w-full max-w-md relative group">
-        <Search className="absolute left-3 top-2.5 text-gray-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
+        <Search
+          className="absolute left-3 top-2.5 text-gray-400 group-focus-within:text-emerald-500 transition-colors"
+          size={18}
+        />
         <input
           type="text"
           placeholder="Buscar por ID, nombre o precio..."
@@ -249,14 +266,22 @@ export default function PreciosEspeciales({ data, setData }) {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="font-medium text-gray-800">{row.nombreTercero}</span>
-                        <span className="text-xs text-gray-400">ID: {row.id_tercero}</span>
+                        <span className="font-medium text-gray-800">
+                          {row.nombreTercero}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          ID: {row.id_tercero}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="font-medium text-gray-800">{row.nombreMaterial}</span>
-                        <span className="text-xs text-gray-400">ID: {row.idMaterial}</span>
+                        <span className="font-medium text-gray-800">
+                          {row.nombreMaterial}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          ID: {row.idMaterial}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-emerald-700 bg-emerald-50/30">
@@ -269,7 +294,10 @@ export default function PreciosEspeciales({ data, setData }) {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-400">
+                  <td
+                    colSpan="5"
+                    className="px-6 py-8 text-center text-gray-400"
+                  >
                     No se encontraron registros.
                   </td>
                 </tr>
@@ -282,7 +310,9 @@ export default function PreciosEspeciales({ data, setData }) {
       {/* PAGINACIÓN */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 px-2 text-sm text-gray-600">
         <span className="text-gray-500">
-           Mostrando página <span className="font-bold text-gray-800">{currentPage}</span> de {totalPages}
+          Mostrando página{" "}
+          <span className="font-bold text-gray-800">{currentPage}</span> de{" "}
+          {totalPages}
         </span>
 
         <div className="flex items-center gap-2">
@@ -324,7 +354,9 @@ export default function PreciosEspeciales({ data, setData }) {
 
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">ID Tercero</label>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">
+                  ID Tercero
+                </label>
                 <InputAutosuggest
                   label={labels.tercero}
                   name="id_tercero"
@@ -337,7 +369,9 @@ export default function PreciosEspeciales({ data, setData }) {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">ID Material</label>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">
+                  ID Material
+                </label>
                 <InputAutosuggest
                   label={labels.material}
                   name="idMaterial"
@@ -350,9 +384,13 @@ export default function PreciosEspeciales({ data, setData }) {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Precio</label>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">
+                  Precio
+                </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-gray-400">$</span>
+                  <span className="absolute left-3 top-2.5 text-gray-400">
+                    $
+                  </span>
                   <input
                     name="precio"
                     type="number"
@@ -389,12 +427,16 @@ export default function PreciosEspeciales({ data, setData }) {
               <X size={20} />
             </button>
 
-            <h3 className="text-xl font-bold text-gray-800 mb-6">Editar Precio Especial</h3>
+            <h3 className="text-xl font-bold text-gray-800 mb-6">
+              Editar Precio Especial
+            </h3>
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">ID Tercero</label>
+                  <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">
+                    ID Tercero
+                  </label>
                   <input
                     name="id_tercero"
                     type="number"
@@ -405,7 +447,9 @@ export default function PreciosEspeciales({ data, setData }) {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">ID Material</label>
+                  <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">
+                    ID Material
+                  </label>
                   <input
                     name="idMaterial"
                     type="text"
@@ -418,16 +462,20 @@ export default function PreciosEspeciales({ data, setData }) {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Nombre Tercero</label>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">
+                  Nombre Tercero
+                </label>
                 <input
                   value={formData.nombreTercero || ""}
                   className="w-full px-3 py-2 text-sm bg-gray-50 text-gray-500 border border-gray-200 rounded-lg cursor-not-allowed"
                   readOnly
                 />
               </div>
-              
+
               <div>
-                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Nombre Material</label>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">
+                  Nombre Material
+                </label>
                 <input
                   value={formData.nombreMaterial || ""}
                   className="w-full px-3 py-2 text-sm bg-gray-50 text-gray-500 border border-gray-200 rounded-lg cursor-not-allowed"
@@ -436,10 +484,14 @@ export default function PreciosEspeciales({ data, setData }) {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-emerald-600 uppercase mb-1 block">Nuevo Precio</label>
+                <label className="text-xs font-bold text-emerald-600 uppercase mb-1 block">
+                  Nuevo Precio
+                </label>
                 <div className="relative">
-                   <span className="absolute left-3 top-2.5 text-gray-400">$</span>
-                   <input
+                  <span className="absolute left-3 top-2.5 text-gray-400">
+                    $
+                  </span>
+                  <input
                     name="precio"
                     type="number"
                     value={formData.precio || ""}
@@ -465,35 +517,36 @@ export default function PreciosEspeciales({ data, setData }) {
       {/* MODAL ELIMINAR (Confirmación) */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm relative animate-in fade-in zoom-in duration-200 text-center">
-                
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                    <AlertTriangle className="h-6 w-6 text-red-600" />
-                </div>
-                
-                <h3 className="text-lg font-bold text-gray-900 mb-2">¿Estás seguro?</h3>
-                <p className="text-sm text-gray-500 mb-6">
-                    Esta acción eliminará el precio especial permanentemente. No se puede deshacer.
-                </p>
-                
-                <div className="flex gap-3 justify-center">
-                    <button
-                        onClick={() => setShowDeleteModal(false)}
-                        className="px-4 py-2 bg-white text-gray-700 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        onClick={handleDeleteExecute}
-                        className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                    >
-                        Sí, eliminar
-                    </button>
-                </div>
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm relative animate-in fade-in zoom-in duration-200 text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
             </div>
+
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              ¿Estás seguro?
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">
+              Esta acción eliminará el precio especial permanentemente. No se
+              puede deshacer.
+            </p>
+
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 bg-white text-gray-700 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteExecute}
+                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
         </div>
       )}
-
     </div>
   );
 }
