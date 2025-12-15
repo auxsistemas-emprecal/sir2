@@ -117,6 +117,8 @@ export default function AnticipoRegister({
     concepto: "",
     idTipoPago: "1",
     tipoPago:
+    
+
       paymentTypes.length > 0
         ? paymentTypes[0].name
         : "Seleccionar tipo de pago",
@@ -127,7 +129,7 @@ export default function AnticipoRegister({
   const [sugerencias, setSugerencias] = useState([]);
 
   useEffect(() => {
-    const valor = parseFloat(formData.valorAnticipo) || 0;
+    const valor = parseFloat(formData.valor) || 0;
 
     if (valor > 0) {
       const texto = numeroALetras(valor);
@@ -138,7 +140,7 @@ export default function AnticipoRegister({
     } else {
       setFormData((prev) => ({ ...prev, sumaLetras: "" }));
     }
-  }, [formData.valorAnticipo]);
+  }, [formData.valor]);
 
   // Función para seleccionar un Tercero y llenar campos automáticamente
   const seleccionarTercero = (tercero) => {
@@ -195,12 +197,14 @@ export default function AnticipoRegister({
     }
 
     const record = {
+      estado: "VIGENTE",
       id: Date.now(),
       ...formData,
       valor: parseFloat(formData.valor),
     };
 
     onSaveAnticipo(record);
+    console.log(record)
     alert("Anticipo registrado y guardado exitosamente.");
 
     // Limpiar formulario
@@ -220,6 +224,7 @@ export default function AnticipoRegister({
       idTipoPago: paymentTypes.length > 0 ? paymentTypes[0].name : "Efectivo",
       pagado: 0,
       sumaLetras: "",
+      
     }));
   };
 

@@ -5,7 +5,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 // CORRECCIÓN: Quitamos la extensión explícita '.js' ya que el entorno la estaba rechazando con la ruta relativa.
 import { loginUser } from "../assets/services/authService";
 
-const AuthForm = ({ onLogin }) => {
+const AuthForm = ({ onLogin, setUsuario }) => {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
@@ -22,6 +22,9 @@ const AuthForm = ({ onLogin }) => {
       ...datos,
       [e.target.name]: e.target.value,
     });
+    if (e.target.name === "usuario") {
+      setUsuario(e.target.value);
+    }
   };
 
   const validar = () => {

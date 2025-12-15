@@ -43,7 +43,10 @@ export default function AnticiposArchived({ data, toggleAnticipoEstado }) {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <Search size={16} className="absolute left-2.5 top-2.5 text-gray-400" />
+          <Search
+            size={16}
+            className="absolute left-2.5 top-2.5 text-gray-400"
+          />
         </div>
       </div>
 
@@ -99,26 +102,31 @@ export default function AnticiposArchived({ data, toggleAnticipoEstado }) {
             ) : (
               filteredData
                 .slice()
-                .sort((a, b) => b.id_pago - a.id_pago)
+                .sort((a, b) => b.id - a.id)
                 .map((anticipo) => (
-                  <tr key={anticipo.id_pago} className="hover:bg-gray-50">
-                    
+                  <tr key={anticipo.id} className="hover:bg-gray-50">
                     {/* Estado + botón */}
-              <td className="px-6 py-4 text-center">
-  <button
-    onClick={() => toggleAnticipoEstado(anticipo)}
-    className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase border shadow-sm transition-colors ${
-      anticipo.estado === "VIGENTE"
-        ? "bg-red-100 text-red-700 border-red-200 hover:bg-red-200"
-        : "bg-green-100 text-green-700 border-green-200 hover:bg-green-200"
-    }`}
-  >
-    {anticipo.estado === "VIGENTE" ? "ANULAR" : "VIGENTE"}
-  </button>
-</td>
-
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => {
+                          console.log(
+                            "Anticipo para cambiar estado:",
+                            anticipo
+                          );
+                          // Llama a la función para cambiar el estado.
+                          toggleAnticipoEstado(anticipo);
+                        }}
+                        className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase border shadow-sm transition-colors ${
+                          anticipo.estado === "VIGENTE"
+                            ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200"
+                            : "bg-red-100 text-red-700 border-red-200 hover:bg-red-200"
+                        }`}
+                      >
+                        {anticipo.estado}
+                      </button>
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      {anticipo.id_pago}
+                      {anticipo.id}
                     </td>
 
                     <td className="px-6 py-4 text-sm text-gray-500">
@@ -304,19 +312,19 @@ export default function AnticiposArchived({ data, toggleAnticipoEstado }) {
 //                 .map((anticipo) => (
 //                   <tr
 //                     key={anticipo.id}
-                    
+
 //                     className="hover:bg-gray-50 transition-colors"
 //                   >
 //                   <td className="px-6 py-4 whitespace-nowrap text-center">
 //                     <button
 //                       onClick={() => toggleAnticipoEstado(
-//                     anticipo.id_pago, 
-//                     anticipo.estado === "VIGENTE" ? "ANULADA" : "VIGENTE" 
+//                     anticipo.id_pago,
+//                     anticipo.estado === "VIGENTE" ? "ANULADA" : "VIGENTE"
 //                   )}
 //                       className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase border shadow-sm transition-colors ${
 //                     anticipo.estado === "VIGENTE"
-//                       ? "bg-red-100 text-red-700 border-red-200 hover:bg-red-200" 
-//                       : "bg-green-100 text-green-700 border-green-200 hover:bg-green-200" 
+//                       ? "bg-red-100 text-red-700 border-red-200 hover:bg-red-200"
+//                       : "bg-green-100 text-green-700 border-green-200 hover:bg-green-200"
 //                   }`}
 //                   >
 //                     {anticipo.estado === "VIGENTE" ? "ANULAR" : "HACER VIGENTE"}

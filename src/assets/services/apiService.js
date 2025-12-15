@@ -1,7 +1,7 @@
 // Importa token
 import { getToken } from "./authService";
 
-const BASE_URL = "http://192.168.150.6:8000";
+const BASE_URL = "http://192.168.150.13:8000";
 
 // Headers con token
 const getAuthHeaders = () => ({
@@ -43,23 +43,24 @@ export const fetchMovimientos = async () => {
  * Endpoint: http://192.168.150.6:8000/movimientos/ultima
  */
 export const fetchLastRemisionNumber = async () => {
-    try {
-        // 🛑 Usar el endpoint que especificaste
-        const response = await fetch(`${BASE_URL}/movimientos/ultima`, { 
-            headers: getAuthHeaders(),
-        });
-        
-        if (!response.ok) {
-            console.error(`Fallo al obtener el último consecutivo (Estatus: ${response.status})`);
-            return null; 
-        }
-        
-        return await response.json() 
+  try {
+    // 🛑 Usar el endpoint que especificaste
+    const response = await fetch(`${BASE_URL}/movimientos/ultima`, {
+      headers: getAuthHeaders(),
+    });
 
-    } catch (error) {
-        console.error("Error obteniendo el último consecutivo:", error);
-        return null;
+    if (!response.ok) {
+      console.error(
+        `Fallo al obtener el último consecutivo (Estatus: ${response.status})`
+      );
+      return null;
     }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error obteniendo el último consecutivo:", error);
+    return null;
+  }
 };
 
 /**
@@ -214,8 +215,6 @@ export const createMovimientoItem = async (item) => {
   return await res.json();
 };
 
-
-
 /* ============================================================
     (Función startEditing)
    ============== ============================================== */
@@ -226,30 +225,44 @@ export const createMovimientoItem = async (item) => {
  * @returns {Promise<Array>} Lista de objetos de ítems de movimiento.
  */
 export const fetchMovimientoItemsByRemision = async (remision) => {
-    try {
-        // const token = localStorage.getItem('token');
-        // if (!token) throw new Error("No hay token de autenticación.");
-        const response = await fetch(`${BASE_URL}/movimientoItems/remision/${remision}`, {
-            method: 'GET',
-            headers: getAuthHeaders()
-            // headers: {
-            //     // 'Content-Type': 'application/json',
-            //     // 'Authorization': `Bearer ${token}`,
-            // },
-        });
+  try {
+    // const token = localStorage.getItem('token');
+    // if (!token) throw new Error("No hay token de autenticación.");
+    const response = await fetch(
+      `${BASE_URL}/movimientoItems/remision/${remision}`,
+      {
+        method: "GET",
+        headers: getAuthHeaders(),
+        // headers: {
+        //     // 'Content-Type': 'application/json',
+        //     // 'Authorization': `Bearer ${token}`,
+        // },
+      }
+    );
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || `Error al obtener ítems de remisión ${remision}: ${response.statusText}`);
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error("API Error - fetchMovimientoItemsByRemision:", error);
-        throw error;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.message ||
+          `Error al obtener ítems de remisión ${remision}: ${response.statusText}`
+      );
     }
+
+    return await response.json();
+  } catch (error) {
+    console.error("API Error - fetchMovimientoItemsByRemision:", error);
+    throw error;
+  }
 };
 
+export const updateMovimientoItems = async (remision, items) => {
+  const res = await fetch(`${BASE_URL}/movimientoItems/${remision}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(items),
+  });
+  return await res.json();
+};
 
 /* ============================================================
    🟩 TERCEROS
@@ -500,8 +513,8 @@ export const fetchPagos = async () => {
     });
 
     if (!res.ok) {
-        console.error(`Error ${res.status} al obtener pagos`);
-        return [];
+      console.error(`Error ${res.status} al obtener pagos`);
+      return [];
     }
 
     const json = await res.json();
@@ -587,7 +600,44 @@ export const deletePago = async (id) => {
 };
 
 
+// ... (código existente)
 
+// ====================================================================
+// 💵 GASTOS
+// ====================================================================
+
+/**
+ * Crea un nuevo registro de gasto en la base de datos.
+ * @param {object} gasto - Objeto con la descripción, valor y observación del gasto.
+ * @returns {Promise<object>} El objeto del gasto creado.
+ */
+export const createGasto = async (gasto) => {
+  // 🛑 Validación CRÍTICA: Bloquear la llamada si no hay token
+  if (!getToken()) {
+    console.error("Token de autenticación faltante para createGasto.");
+    throw new Error("Autenticación requerida.");
+  }
+
+  try {
+    const response = await fetch(`${BASE_URL}/gastos`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(gasto),
+    });
+
+    if (!response.ok) {
+      // Intenta leer el mensaje de error del backend
+      const errorData = await response.json();
+      throw new Error(errorData.message || `Error en la respuesta del servidor: ${response.status}`);
+    }
+
+    const json = await response.json();
+    return json.data;
+  } catch (error) {
+    console.error("Error creando gasto:", error);
+    throw error;
+  }
+};
 
 // --------------------------archivo anterior hasta el 01/12 9:30-------------------------
 

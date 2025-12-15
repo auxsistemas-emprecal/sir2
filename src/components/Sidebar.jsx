@@ -13,6 +13,7 @@ import {
   Archive,
   LogOut,
   UserStar,
+  ClipboardList,
 } from "lucide-react";
 
 export default function Sidebar({
@@ -75,6 +76,13 @@ export default function Sidebar({
         />
 
         <NavItem
+          icon={<ClipboardList size={20} />} // Usando Archive, ya importado
+          label="Cuadre Caja"
+          active={activeTab === "cuadreCaja"}
+          onClick={() => setActiveTab("cuadreCaja")}
+        />
+        
+        <NavItem
           icon={<FileSpreadsheet size={20} />}
           label="Movimientos"
           active={activeTab === "movimientos"}
@@ -122,7 +130,7 @@ export default function Sidebar({
         <button
           onClick={handleLogoutConfirm}
           className="flex items-center w-full px-4 py-3 rounded-lg transition-all duration-200
-                     text-red-400 hover:text-red-200 hover:bg-slate-800 hover:translate-x-1"
+                    text-red-400 hover:text-red-200 hover:bg-slate-800 hover:translate-x-1"
         >
           <LogOut size={20} className="mr-3" />
           <span className="font-medium">Cerrar sesión</span>

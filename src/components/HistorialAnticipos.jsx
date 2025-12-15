@@ -1,17 +1,14 @@
 import React, { useEffect, useState } from "react";
-import AnticiposArchived from "./AnticiposArchived.jsx"; 
+import AnticiposArchived from "./AnticiposArchived.jsx";
 import {
   fetchPagos,
   fetchTiposPago,
-  searchTercero
-} from "../assets/services/apiService.js"; 
-
+  searchTercero,
+} from "../assets/services/apiService.js";
 
 export default function HistorialAnticipos({ toggleAnticipoEstado }) {
   const [pagosFormateados, setPagosFormateados] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-
 
   useEffect(() => {
     const cargarDatos = async () => {
@@ -39,6 +36,7 @@ export default function HistorialAnticipos({ toggleAnticipoEstado }) {
           );
 
           // Buscar el nombre del tipo de pago por su ID
+
           const tipoEncontrado = tiposPagoData.find(
             (tp) => String(tp.idTipoPago) === pago.idTipoPago
           );
@@ -56,6 +54,7 @@ export default function HistorialAnticipos({ toggleAnticipoEstado }) {
             concepto: pago.concepto,
             valorAnticipo: pago.valor,
             tipoPago: tipoEncontrado ? tipoEncontrado.tipo_pago : "N/A",
+            idTercero: pago.idTercero,
           };
         });
 
@@ -78,11 +77,10 @@ export default function HistorialAnticipos({ toggleAnticipoEstado }) {
 
   return (
     <div className="p-4">
-      <AnticiposArchived data={pagosFormateados} 
-      toggleAnticipoEstado={toggleAnticipoEstado}
+      <AnticiposArchived
+        data={pagosFormateados}
+        toggleAnticipoEstado={toggleAnticipoEstado}
       />
     </div>
   );
 }
-
-

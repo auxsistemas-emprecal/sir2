@@ -12,8 +12,8 @@ import AnticipoRegister from "./components/AnticipoRegister.jsx";
 // import AnticiposArchived from "./components/AnticiposArchived.jsx";
 import HistorialAnticipos from "./components/HistorialAnticipos.jsx";
 import AuthForm from "./components/AuthForm.jsx";
-
 import MovimientosPage from "./components/MovimientosPage.jsx";
+import CuadreCaja from "./components/CuadreCaja.jsx";
 
 // Servicios
 import { getToken, logoutUser } from "./assets/services/authService.js";
@@ -38,9 +38,8 @@ import {
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("inicio");
-
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
+  const [usuario, setUsuario] = useState("");
   const [materials, setMaterials] = useState([]);
   const [paymentTypes, setPaymentTypes] = useState([]);
   const [movements, setMovements] = useState([]);
@@ -112,6 +111,13 @@ export default function App() {
     })();
   }, [isAuthenticated]);
 
+  // Guardar el usuario en localStorage
+  useEffect(() => {
+    if (usuario) {
+      localStorage.setItem("usuario", usuario);
+    }
+  }, [usuario]);
+
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
     setActiveTab("inicio");
@@ -161,7 +167,8 @@ export default function App() {
         "2. Cabecera creada. Remisión ID:",
         remisionCreada.data[0].remision
       );
-      // PASO B: Recorrer los materiales y guardarlos uno por uno (/movimientoItems)
+      // PASO B: Recorrer los materiales   guardarlos uno por uno (/movimientoItems)
+
       for (const item of itemsList) {
         const payloadItem = {
           remision: remisionCreada.data[0].remision,
@@ -181,8 +188,7 @@ export default function App() {
 
       // PASO C: Recargar todo para que MovimientosPage se actualice
       await loadMovimientos();
-
-      return responseHeader;
+      return remisionCreada;
     } catch (error) {
       console.error("Error en la secuencia de guardado:", error);
       throw error;
@@ -195,67 +201,254 @@ export default function App() {
   // ==================================================
 
   const addAnticipo = async (newAnticipo) => {
-    console.log(newAnticipo);
+    // console.log(newAnticipo);
     await createPago(newAnticipo);
     await loadAnticipos(); // <<< CAMBIO CLAVE: Recargar anticipos después de crear uno >>>
     setActiveTab("archivedAnticipos");
   };
+// // ==================================================
+// // 🟢 FUNCIÓN DE TOGGLE DE ESTADO (Anticipos)
+// // ==================================================
 
-  // ==================================================
-  // 🟢 FUNCIÓN DE TOGGLE DE ESTADO (Anticipos)
-  // ==================================================
-  const handleToggleAnticipoEstado = async (pagoCompleto) => {
-    // El ID se obtiene correctamente desde el objeto pagoCompleto
-    const id_pago = pagoCompleto.id_pago || pagoCompleto.id; 
+// const handleToggleAnticipoEstado = async (pagoCompleto) => {
+//     const id_pago = pagoCompleto.id_pago || pagoCompleto.id;
+//     const nuevoEstado =
+//         pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
 
-    const nuevoEstado =
-      pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
+//     if (
+//         !window.confirm(
+//             `¿Está seguro de cambiar el estado del pago ID ${id_pago} a "${nuevoEstado}"?`
+//         )
+//     ) {
+//         return;
+//     }
+
+//     try {
+//         // 2. CREACIÓN DEL PAYLOAD CON MAPEO COMPLETO
+//         // Creamos un nuevo objeto usando los nombres de las columnas SQL que la API espera.
+//         const payload = {
+// id_pago: id_pago,
+//     estado: nuevoEstado, 
+
+//     // Campos que ya coincidían por nombre (Solo se asegura el dato):
+//     fecha: pagoCompleto.fecha,
+//     idTercero: pagoCompleto.idTercero, 
+//     tipo: pagoCompleto.tipo, 
+//     no_ingreso: pagoCompleto.no_ingreso, 
+//     cedula: pagoCompleto.cedula, 
+//     telefono: pagoCompleto.telefono, 
+//     direccion: pagoCompleto.direccion, 
+//     concepto: pagoCompleto.concepto, 
+//     pagado: pagoCompleto.pagado,
+
+//     // --- CORRECCIÓN 1: VALOR (Asegurar nombre correcto y formato numérico) ---
+//     // Usar 'valor' (nombre SQL) y asegurar que el dato sea un número.
+//     valor: Number(pagoCompleto.valor || pagoCompleto.valorAnticipo) || 0,
+    
+//     // --- CORRECCIÓN 2: IDTIPO PAGO (CLAVE: Evitar enviar texto al campo ID) ---
+//     // Usar solo idTipoPago. Si no tiene valor, enviar 'null'. 
+//     // Se elimina la opción 'pagoCompleto.tipoPago' (la descripción en texto).
+//     idTipoPago: pagoCompleto.idTipoPago ? pagoCompleto.idTipoPago : null,
+    
+//     // --- CORRECCIÓN 3: REMISIONES (Asegurar solo una alternativa o null) ---
+//     // Si 'remisiones' es null, usar 'noComprobante'. Se quita la opción 'null' final si se asume string vacío.
+//     remisiones: pagoCompleto.remisiones || pagoCompleto.noComprobante || '', 
+// };
+
+//         console.log("Payload enviado a la API:", payload);
+//         // 3. Persistir el cambio en el servidor (API)
+//         await updatePago(id_pago, payload);
+
+//         // 4. Sincronización UI: Recargar toda la lista
+//         await loadAnticipos();
+
+//         // 5. Notificación de Éxito
+//         alert(`Pago ID ${id_pago} actualizado a ${nuevoEstado}`);
+//     } catch (error) {
+//         // ... (Manejo de errores)
+//     }
+// };
+  // // ==================================================
+  // // 🟢 FUNCIÓN DE TOGGLE DE ESTADO (Anticipos)
+  // // ==================================================
+
+  // const handleToggleAnticipoEstado = async (pagoCompleto) => {
+  //   const id_pago = pagoCompleto.id_pago || pagoCompleto.id;
+  //   const nuevoEstado =
+  //     pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
+
+  //   if (
+  //     !window.confirm(
+  //       `¿Está seguro de cambiar el estado del pago ID ${id_pago} a "${nuevoEstado}"?`
+  //     )
+  //   ) {
+  //     return;
+  //   }
+
+  //   try {
+  //     const payload = {
+  //       ...pagoCompleto,
+  //       estado: nuevoEstado,
+  //     };
+
+  //     console.log(payload);
+  //     // 3. Persistir el cambio en el servidor (API)
+  //     // Si esta llamada falla, el código salta inmediatamente al bloque catch.
+  //     console.log({ id_pago, payload });
+  //     await updatePago(id_pago, payload);
+
+  //     // 4. Sincronización UI: Recargar toda la lista desde el servidor.
+  //     await loadAnticipos();
+
+  //     // 5. Notificación de Éxito
+  //     alert(`Pago ID ${id_pago} actualizado a ${nuevoEstado}`);
+  //   } catch (error) {
+  //     // 6. Manejo de errores: Si updatePago o loadAnticipos fallan.
+  //     console.error("Error completo al cambiar el estado del anticipo:", error);
+
+  //     // Si el error contiene una respuesta del servidor, muéstrala.
+  //     const errorMessage =
+  //       error.response?.data?.message || error.message || "Error desconocido.";
+
+  //     alert(
+  //       `Error al actualizar el pago. Por favor, revise la conexión. Mensaje: ${errorMessage}`
+  //     );
+  //   }
+  // };
+
+
+// // ========================================================================
+// // 🟢 FUNCIÓN DE TOGGLE DE ESTADO (FINAL - EJECUTABLE)
+// // ========================================================================
+// const handleToggleAnticipoEstado = async (pagoCompleto) => {
+//     // El ID lo obtenemos del campo 'id' que viene en el objeto del frontend
+//     const id_pago = pagoCompleto.id; 
+//     const nuevoEstado = pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
+
+//     if (
+//         !window.confirm(
+//             `¿Está seguro de cambiar el estado del pago ID ${id_pago} a "${nuevoEstado}"?`
+//         )
+//     ) {
+//         return;
+//     }
+
+//     try {
+//         // 1. CONSTRUCCIÓN DEL PAYLOAD USANDO NOMBRES DE COLUMNA SQL
+//         const payload = {
+//             // --- CAMPOS DE COLUMNA SQL GARANTIZADOS ---
+//             estado: nuevoEstado, 
+//             fecha: pagoCompleto.fecha,
+//             idTercero: pagoCompleto.idTercero, 
+//             tipo: pagoCompleto.tipo || 'Anticipo', 
+//             cedula: pagoCompleto.cedula || '',
+//             telefono: pagoCompleto.telefono || '',
+//             direccion: pagoCompleto.direccion || null,
+//             concepto: pagoCompleto.concepto || '',
+//             pagado: pagoCompleto.pagado || 0,
+//             no_ingreso: pagoCompleto.no_ingreso || null,
+
+//             // --- MAPEO DE CAMPOS CONFLICTIVOS / CRÍTICOS ---
+            
+//             // 🚨 MAPEO 1: Valor (Frontend: valorAnticipo/valor -> SQL: valor)
+//             // Aseguramos formato numérico para la columna DECIMAL.
+//             valor: Number(pagoCompleto.valorAnticipo) || Number(pagoCompleto.valor) || 0, 
+
+//             // 🚨 MAPEO 2: Tipo de Pago (Frontend: tipoPago/idTipoPago -> SQL: idTipoPago)
+//             // Priorizamos el ID numérico/string del ID. NUNCA la descripción.
+//             idTipoPago: pagoCompleto.idTipoPago || null,
+            
+//             // 🚨 MAPEO 3: Comprobante (Frontend: noComprobante/remisiones -> SQL: remisiones)
+//             // Usamos remisiones (nombre SQL) y aceptamos la alternativa de frontend.
+//             remisiones: pagoCompleto.noComprobante || pagoCompleto.remisiones || '', 
+//         };
+        
+//         console.log("Payload FINAL y Mapeado enviado a la API:", payload);
+
+//         // 2. Persistir el cambio en el servidor (API)
+//         await updatePago(id_pago, payload);
+
+//         // 3. Sincronización UI
+//         await loadAnticipos();
+
+//         // 4. Notificación
+//         alert(`Pago ID ${id_pago} actualizado a ${nuevoEstado}`);
+//     } catch (error) {
+//         // Manejo de errores
+//         console.error("Error al cambiar el estado del anticipo:", error);
+//         const errorMessage = error.response?.data?.message || error.message || "Error desconocido.";
+//         alert(`Error al actualizar el pago. Mensaje: ${errorMessage}`);
+//     }
+// };
+// ========================================================================
+// 🟢 FUNCIÓN DE TOGGLE DE ESTADO (MÁXIMA ROBUSTEZ Y VALORES DE FÁBRICA)
+// ========================================================================
+const handleToggleAnticipoEstado = async (pagoCompleto) => {
+    // 1. DETERMINACIÓN DE ID y ESTADO
+    const id_pago = pagoCompleto.id; 
+    const nuevoEstado = pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
 
     if (
-      !window.confirm(
-        `¿Está seguro de cambiar el estado del pago ID ${id_pago} a "${nuevoEstado}"?`
-      )
+        !window.confirm(
+            `¿Está seguro de cambiar el estado del pago ID ${id_pago} a "${nuevoEstado}"?`
+        )
     ) {
-      return;
+        return;
     }
 
     try {
-      const payload = {
-        fecha: pagoCompleto.fecha,
-        idTercero: pagoCompleto.idTercero,
-        tipo: pagoCompleto.tipo,
-        remisiones: pagoCompleto.remisiones,
-        valor: pagoCompleto.valor,
-        no_ingreso: pagoCompleto.no_ingreso,
-        cedula: pagoCompleto.cedula,
-        telefono: pagoCompleto.telefono,
-        direccion: pagoCompleto.direccion,
-        concepto: pagoCompleto.concepto,
-        idTipoPago: pagoCompleto.idTipoPago,
-        pagado: pagoCompleto.pagado,
-        estado: nuevoEstado,
-      };
+        // 2. CONSTRUCCIÓN DEL PAYLOAD CON VALORES POR DEFECTO Y MAPEO COMPLETO
+        
+        const payload = {
+            // --- CAMPOS QUE ESTÁN EN EL OBJETO DE ORIGEN ---
+            fecha: pagoCompleto.fecha,
+            idTercero: pagoCompleto.idTercero, 
+            cedula: pagoCompleto.cedula || '',
+            telefono: pagoCompleto.telefono || '',
+            concepto: pagoCompleto.concepto || '',
+            
+            // --- CAMPOS NECESARIOS FALTANTES CON VALOR FALLBACK ---
+            tipo: pagoCompleto.tipo || 'Anticipo',         // Asumimos 'Anticipo'
+            direccion: pagoCompleto.direccion || '',       // Asumimos cadena vacía
+            no_ingreso: pagoCompleto.no_ingreso || '',     // Asumimos cadena vacía
+            pagado: pagoCompleto.pagado || 0,              // Asumimos 0
+            
+            // --- ESTADO (El único que se actualiza) ---
+            estado: nuevoEstado, 
 
-      const response = await updatePago(id_pago, payload);
+            // 🚨 MAPEO 1: Valor (Frontend: valorAnticipo -> SQL: valor) - No Nulo
+            valor: Number(pagoCompleto.valorAnticipo) || Number(pagoCompleto.valor) || 0, 
+            
+            // 🚨 MAPEO 2: Tipo de Pago (Frontend: tipoPago -> SQL: idTipoPago)
+            // Ya que el objeto solo trae "Efectivo", asumimos que el ID es '1' 
+            // si no viene idTipoPago. Si este ID no es correcto, la API fallará.
+            idTipoPago: pagoCompleto.idTipoPago || '', // ⚠️ Usar '1' si no viene (Asumiendo que Efectivo es 1)
+            
+            // 🚨 MAPEO 3: Comprobante (Frontend: noComprobante -> SQL: remisiones)
+            remisiones: pagoCompleto.noComprobante || pagoCompleto.remisiones || '', 
+        };
+        
+        console.log("Payload FINAL (Robusto) enviado a la API:", payload);
 
-      await loadAnticipos(); // <<< CAMBIO CLAVE: Recargar anticipos después de actualizar el estado >>>
+        // 3. Persistir el cambio en el servidor (API)
+        await updatePago(id_pago, payload);
 
-      alert(`Pago actualizado a ${nuevoEstado}`);
+        // 4. Sincronización UI y Notificación
+        await loadAnticipos();
+        alert(`Pago ID ${id_pago} actualizado a ${nuevoEstado}`);
     } catch (error) {
-      console.error("Error al cambiar el estado:", error);
-      alert("Error al actualizar el pago.");
+        // Manejo de errores
+        console.error("Error al cambiar el estado del anticipo:", error);
+        const errorMessage = error.response?.data?.message || error.message || "Error desconocido.";
+        alert(`Error al actualizar el pago. Mensaje: ${errorMessage}`);
     }
-  };
-
-  const toggleCancelado = (id) => {
-    setMovements((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, cancelado: !m.cancelado } : m))
-    );
-  };
-
+};
+  //==========================================================================
+  //============================muestra el Login==============================
+  //==========================================================================
   if (!isAuthenticated) {
     // Si no está autenticado, muestra el Login
-    return <AuthForm onLogin={handleLoginSuccess} />;
+    return <AuthForm onLogin={handleLoginSuccess} setUsuario={setUsuario} />;
   }
 
   // ==================================================
@@ -300,7 +493,13 @@ export default function App() {
               }} // 🆕 Limpiar estado
               isEditing={isEditing} // 🆕 Indicador de edición
               setIsEditing={setIsEditing} // 🆕 Setter para indicador de edición
+              usuario={usuario}
+              setActiveTab={setActiveTab}
             />
+          )}
+
+          {activeTab === "cuadreCaja" && (
+            <CuadreCaja movements={movements} anticipos={anticipos} />
           )}
 
           {activeTab === "anticipo" && (
@@ -316,12 +515,13 @@ export default function App() {
               data={movements}
               onRefresh={loadMovimientos}
               onEdit={startEditing}
+              paymentTypes={paymentTypes}
               // 🆕 Pasar la función para iniciar la edición
             />
           )}
 
           {activeTab === "archivedAnticipos" && (
-            <HistorialAnticipos 
+            <HistorialAnticipos
               data={anticipos} // Ahora 'anticipos' debería estar lleno
               toggleAnticipoEstado={handleToggleAnticipoEstado}
             />

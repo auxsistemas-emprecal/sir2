@@ -11,8 +11,10 @@ import {
   searchTercero,
   fetchPreciosEspeciales,
   fetchMateriales,
-  fetchLastRemisionNumber, // 🛑 Importar la nueva función
+  fetchLastRemisionNumber,
   fetchMovimiento,
+  updateMovimiento,
+  updateMovimientoItems,
 } from "../assets/services/apiService";
 
 // --- Nuevo Componente: Modal de Confirmación ---
@@ -63,17 +65,43 @@ export default function InvoiceGenerator({
   editingItems,
   isEditing,
   setIsEditing,
+  usuario,
+  setActiveTab,
 }) {
-  // 🛑 MODIFICACIÓN 1: Nuevo estado para guardar el número de remisión
   const [nextRemisionNumber, setNextRemisionNumber] = useState(null);
 
   const defaultPaymentType =
     paymentTypes.length > 0
       ? paymentTypes[0]
-      : { tipo_pago: "Efectivo", idTipoPago: null, name: "Efectivo" };
+      : { tipo_pago: "Efectivo", idTipoPago: 1, name: "Efectivo" };
+
+  // Función auxiliar para obtener fecha y hora en zona horaria de Colombia
+  const getColombiaDateParts = (dateString) => {
+    const date = dateString ? new Date(dateString) : new Date();
+
+    // Obtener fecha en formato YYYY-MM-DD basado en Colombia
+    const fecha = date.toLocaleDateString("en-CA", {
+      timeZone: "America/Bogota",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+
+    // Obtener hora en formato HH:mm (24h) basado en Colombia
+    const hora = date.toLocaleTimeString("en-US", {
+      timeZone: "America/Bogota",
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    return { fecha, hora };
+  };
+
   // Estado inicial base
+  const initialDateParts = getColombiaDateParts();
   const initialFormData = {
-    fecha: new Date().toISOString().split("T")[0],
+    fecha: initialDateParts.fecha,
     remision: "",
     conductor: "",
     cedula: "",
@@ -88,14 +116,9 @@ export default function InvoiceGenerator({
       paymentTypes.length > 0
         ? paymentTypes[0].tipo_pago ?? paymentTypes[0].name
         : "Efectivo",
-    idTipoPago:
-      paymentTypes.length > 0 ? paymentTypes[0].idTipoPago ?? null : null, // <--- 🛑 NUEVO: Para guardar el ID del tipo de pago
+    idTipoPago: paymentTypes.length > 0 ? paymentTypes[0].idTipoPago ?? 1 : 1, // <--- 🛑 NUEVO: Para guardar el ID del tipo de pago
     observacion: "",
-    horaLlegada: new Date().toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }),
+    horaLlegada: initialDateParts.hora,
     horaSalida: "",
   };
 
@@ -131,6 +154,7 @@ export default function InvoiceGenerator({
     retencion: 0,
     total: 0,
   });
+  const [showIVARet, setShowIVARet] = useState(true);
 
   //---------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------
@@ -160,8 +184,9 @@ export default function InvoiceGenerator({
         // A. Inicializar la Cabecera (formData) Editar
         // -----------------------------------------------------------
         if (!isEditing) return;
+
         setFormData(() => {
-          const [fecha, hora] = editingMovement.fecha.split("T");
+          const { fecha, hora } = getColombiaDateParts(editingMovement.fecha);
 
           const toReturn = {
             // Mantenemos las claves de la cabecera que vienen de la prop
@@ -173,7 +198,7 @@ export default function InvoiceGenerator({
             incluirIva: Boolean(editingMovement.incluir_iva),
             incluirRet: Boolean(editingMovement.incluir_ret),
             fecha: fecha,
-            horaLlegada: hora.substring(0, 5),
+            horaLlegada: hora,
 
             // Si tiene un campo 'date', asegúrese de que el formato sea el correcto para el input.
           };
@@ -189,6 +214,7 @@ export default function InvoiceGenerator({
         const mappedItems = editingItems.data.map((item) => ({
           ...item,
           // Aseguramos que los valores que van a los inputs de texto sean strings
+          idMaterial: item.idMaterial,
           cantidad: String(item.cantidad),
           precioUnitario: String(item.precioUnitario),
 
@@ -235,7 +261,7 @@ export default function InvoiceGenerator({
   }, [materials, preciosEspeciales]);
 
   // recalcular totales cuando cambian lineItems o flags
-  useEffect(() => {
+  function hacerCalculos() {
     const subtotal = lineItems.reduce((acc, li) => {
       const c = parseFloat(li.cantidad) || 0;
       const p = parseFloat(li.precioUnitario) || 0;
@@ -249,6 +275,10 @@ export default function InvoiceGenerator({
       retencion,
       total: subtotal + iva - retencion,
     });
+  }
+
+  useEffect(() => {
+    hacerCalculos();
   }, [lineItems, formData.incluirIva, formData.incluirRet]);
 
   const handleChange = (e) => {
@@ -299,8 +329,6 @@ export default function InvoiceGenerator({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
-
-    console.log(formData);
   };
   // cambios en una fila (line item)
   const handleLineChange = (index, field, value) => {
@@ -402,90 +430,145 @@ export default function InvoiceGenerator({
     setShowModal(true);
   };
 
+  function compararDatos(
+    datosOriginales = {},
+    datosModificados = {},
+    usuario = ""
+  ) {
+    const ahora = new Date().toLocaleString("es-CO", {
+      timeZone: "America/Bogota",
+    });
+    let cambios = "";
+    for (const key in datosOriginales) {
+      if (datosOriginales[key] !== datosModificados[key]) {
+        if (key === "fecha") {
+          const fechaOriginal = new Date(datosOriginales[key])
+            .toISOString()
+            .split("T")[0];
+          const fechaModificada = new Date(datosModificados[key])
+            .toISOString()
+            .split("T")[0];
+          if (fechaOriginal === fechaModificada) {
+            continue;
+          }
+        }
+        cambios += `\n${ahora}-"${usuario}"-"${key}": <${datosOriginales[key]} -> ${datosModificados[key]}>`;
+      }
+    }
+    return cambios;
+  }
+
   const handleConfirmSave = async () => {
     setShowModal(false);
 
-    // --- CÁLCULO DE CUBICAJE (Respuesta a Pregunta 3.1) ---
     const totalCubicaje = lineItems.reduce((acc, item) => {
       return acc + (Number(item.cantidad) || 0);
     }, 0);
 
-    // 1. Construir el PAYLOAD DE LA CABECERA (/movimientos)
-    // Se asegura snake_case y tipos correctos.
+    // 1. Crear fecha combinada localmente
+    const fechaLocal = new Date(`${formData.fecha}T${formData.horaLlegada}:00`);
+
+    // 2. Restar el offset de la zona horaria para neutralizar la conversión a UTC
     const fechaISO = new Date(
-      `${formData.fecha}T${formData.horaLlegada}:00`
+      fechaLocal.getTime() - fechaLocal.getTimezoneOffset() * 60000
     ).toISOString();
 
-    
+    let remisionLastNumber = await fetchLastRemisionNumber();
+    remisionLastNumber = remisionLastNumber.data[0]?.remision || 0;
+
     const payloadHeader = {
-      // Usamos fecha del form o actual
-      fecha: formData.fecha ? fechaISO : new Date().toISOString(),
-      
-      // --- PREGUNTA 2: FORZAR PARSEINT ---
-      remision: parseInt(formData.remision) || 0,
+      fecha: fechaISO,
+      remision: remisionLastNumber + 1,
       idTercero: formData.idTercero ? parseInt(formData.idTercero) : 0,
-      idTipoPago: formData.idTipoPago ? parseInt(formData.idTipoPago) : 0,
-      
-      // Textos obligatorios (Strings)
+      idTipoPago: formData.idTipoPago,
       placa: formData.placa || "",
       direccion: formData.direccion || "",
       observacion: formData.observacion || "",
       conductor: formData.conductor || "",
       cedula: formData.cedula || "",
       telefono: formData.telefono || "",
-      
-      // --- PREGUNTA 3.2: CAMPOS FALTANTES CON VALOR POR DEFECTO ---
-      no_ingreso: "", // Valor por defecto string vacío
-      estado: "VIGENTE", // Valor por defecto
-      pagado: 0, // Valor por defecto int
-      factura: 0, // Valor por defecto int
-      cubicaje: totalCubicaje, // El valor calculado
-      
-      // Totales calculados
+      no_ingreso: "",
+      estado: "VIGENTE",
+      pagado: 0,
+      factura: 0,
+      cubicaje: totalCubicaje,
       subtotal: Number(calculos.subtotal) || 0,
       iva: Number(calculos.iva) || 0,
       retencion: Number(calculos.retencion) || 0,
       total: Number(calculos.total) || 0,
-      
-      // --- PREGUNTA 1: CAMBIAR NOMBRES (CamelCase a snake_case) ---
       incluir_iva: formData.incluirIva ? 1 : 0,
       incluir_ret: formData.incluirRet ? 1 : 0,
+      tercero: formData.tercero,
+      horaLlegada: formData.horaLlegada,
+      telefono: formData.telefono,
+      tipoPago: formData.tipoPago,
     };
-    
-    // 🛑 DEBUG: Muestra el objeto que se va a enviar
-    // console.log("PAYLOAD CABECERA A ENVIAR:", payloadHeader);
-    
+
+    console.log("Payload: ", payloadHeader);
+
     try {
-      // 🛑 LLAMADA CLAVE: Se asume que App.jsx ya tiene la función addMovement actualizada.
-      await onSave(payloadHeader, lineItems);
-      
+      if (isEditing) {
+        setIsEditing(false);
+        let datosActualizar = {
+          ...formData,
+          // IMPORTANTE: Usar la misma lógica de fechaISO aquí también
+          fecha: fechaISO,
+          incluir_iva: +formData.incluirIva,
+          incluir_ret: +formData.incluirRet,
+          factura: 0,
+          observacion: formData.observacion,
+          subtotal: Number(calculos.subtotal) || 0,
+          iva: Number(calculos.iva) || 0,
+          retencion: Number(calculos.retencion) || 0,
+          total: Number(calculos.total) || 0,
+        };
+
+        const usuario = localStorage.getItem("usuario") || "desconocido";
+
+        let cambios = compararDatos(editingMovement, datosActualizar, usuario);
+        lineItems.forEach((item, idx) => {
+          cambios += compararDatos(editingItems.data[idx], item, usuario);
+          updateMovimientoItems(editingMovement.remision, item);
+        });
+        datosActualizar = {
+          ...datosActualizar,
+          observacion: datosActualizar.observacion + cambios,
+        };
+        updateMovimiento(editingMovement.remision, datosActualizar);
+        window.location.reload();
+        setActiveTab("generador");
+      } else {
+        const responseSaved = await onSave(payloadHeader, lineItems);
+        setFormData({
+          ...payloadHeader,
+          remision: responseSaved.data[0].remision,
+        });
+      }
+
       // --- LÓGICA DE ÉXITO ---
       setLastSavedRecord({ ...payloadHeader, materiales: lineItems });
-      console.log("Datos originales de la remision:", editingMovement);
-      console.log("Ítems originales de la remision:", editingItems);
-      console.log("Datos de cabecera a enviar:", formData);
-      console.log("Items de materiales a enviar:", lineItems);
 
       // Reseteo del formulario
-      setFormData((prev) => {
-        const nextRemisionNumber = parseInt(prev.remision, 10);
-        const nextRemision = isNaN(nextRemisionNumber)
-          ? prev.remision
-          : (nextRemisionNumber + 1).toString();
-        return {
-          ...prev,
-          remision: nextRemision,
-          observacion: "",
-          conductor: "",
-          placa: "",
-          tercero: "",
-          idTercero: null,
-          telefono: "",
-          direccion: "",
-          cedula: "",
-        };
-      });
-      setLineItems(initialLineItems);
+      // setFormData((prev) => {
+      //   const nextRemisionNumber = parseInt(prev.remision, 10);
+      //   const nextRemision = isNaN(nextRemisionNumber)
+      //     ? prev.remision
+      //     : (nextRemisionNumber + 1).toString();
+      //   return {
+      //     ...prev,
+      //     remision: nextRemision,
+      //     observacion: "",
+      //     conductor: "",
+      //     placa: "",
+      //     tercero: "",
+      //     idTercero: null,
+      //     telefono: "",
+      //     direccion: "",
+      //     cedula: "",
+      //     factura: 0,
+      //   };
+      // });
+      // setLineItems(initialLineItems);
     } catch (error) {
       console.error("Fallo al guardar:", error);
       // Muestra el mensaje de error que propagó App.jsx
@@ -493,23 +576,18 @@ export default function InvoiceGenerator({
     }
   };
 
-  // --- NUEVA FUNCIÓN: Iniciar un nuevo registro ---
   const handleNewRecord = () => {
-    // Volver al estado de edición con los datos iniciales (reseteando remisión, cliente, etc.)
+    const currentParts = getColombiaDateParts(); // Usar la función auxiliar
+
     setFormData((prev) => ({
       ...initialFormData,
-      remision: prev.remision, // Mantenemos el consecutivo incrementado
-      // Aseguramos que la fecha y hora de llegada sean las actuales
-      fecha: new Date().toISOString().split("T")[0],
-      horaLlegada: new Date().toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      }),
+      remision: prev.remision,
+      fecha: currentParts.fecha, // Fecha Colombia
+      horaLlegada: currentParts.hora, // Hora Colombia
     }));
     setLineItems(initialLineItems);
     setCalculos({ subtotal: 0, iva: 0, retencion: 0, total: 0 });
-    setLastSavedRecord(null); // Quitar la vista previa del registro guardado
+    setLastSavedRecord(null);
   };
 
   const formatCurrency = (val) =>
@@ -792,6 +870,18 @@ export default function InvoiceGenerator({
                       Incluir Retención
                     </span>
                   </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      name="incluirRet"
+                      checked={showIVARet}
+                      onChange={(e) => setShowIVARet(e.target.checked)}
+                      className="rounded text-emerald-600 w-4 h-4"
+                    />
+                    <span className="text-sm text-gray-600">
+                      Mostrar IVA y Retención
+                    </span>
+                  </label>
                 </div>
               </div>
 
@@ -841,6 +931,7 @@ export default function InvoiceGenerator({
                 value={formData.observacion}
                 onChange={(e) => handleChange(e)}
                 validate={false}
+                type="textarea"
               />
 
               {/* El botón ahora llama a handleAttemptSave para mostrar el modal */}
@@ -896,7 +987,7 @@ export default function InvoiceGenerator({
               {/* TEXTO CENTRADO */}
               <div className="flex-1 text-center">
                 <div className="font-bold text-xl">
-                  EMPRECAL S.A. NIT. 804.002.739-01
+                  EMPRECAL S.A.S NIT. 804.002.739-1
                 </div>
                 <div className="text-xs font-normal mt-1 text-gray-600">
                   Kilómetro 9 vía San Gil - Socorro | Cel. 3138880467
@@ -908,7 +999,11 @@ export default function InvoiceGenerator({
             <div className="p-3">
               <div className="grid grid-cols-[70px_1fr] gap-y-2">
                 <span className="font-bold">Fecha:</span>
-                <span>{previewData.fecha}</span>
+                <span>
+                  {previewData.fecha.toLocaleString("es-CO", {
+                    timeZone: "America/Bogota",
+                  })}
+                </span>
                 <span className="font-bold">Señores:</span>
                 <span className="uppercase font-medium">
                   {previewData.tercero || "................................"}
@@ -1005,7 +1100,7 @@ export default function InvoiceGenerator({
                 </div>
               </div>
 
-              {previewData.incluirIva && (
+              {showIVARet && previewData.incluirIva && (
                 <div className="grid grid-cols-[1fr_120px] border-t border-black">
                   <div className="text-right pr-3 font-bold py-1 border-r-2 border-black bg-gray-50">
                     IVA (19%):
@@ -1016,7 +1111,7 @@ export default function InvoiceGenerator({
                 </div>
               )}
 
-              {previewData.incluirRet && (
+              {showIVARet && previewData.incluirRet && (
                 <div className="grid grid-cols-[1fr_120px] border-t border-black">
                   <div className="text-right pr-3 font-bold py-1 border-r-2 border-black bg-gray-50">
                     RETENCIÓN:
