@@ -14,6 +14,7 @@ import {
   LogOut,
   UserStar,
   ClipboardList,
+  CreditCard
 } from "lucide-react";
 
 export default function Sidebar({
@@ -81,7 +82,7 @@ export default function Sidebar({
           active={activeTab === "cuadreCaja"}
           onClick={() => setActiveTab("cuadreCaja")}
         />
-        
+
         <NavItem
           icon={<FileSpreadsheet size={20} />}
           label="Movimientos"
@@ -115,6 +116,13 @@ export default function Sidebar({
           label="Precios especiales"
           active={activeTab === "PreciosEspeciales"}
           onClick={() => setActiveTab("PreciosEspeciales")}
+        />
+
+        <NavItem
+          icon={<CreditCard size={20} />}
+          label="Créditos"
+          active={activeTab === "creditos"}
+          onClick={() => setActiveTab("creditos")}
         />
 
         <NavItem

@@ -9,6 +9,7 @@ const InputGroup = ({
   type = "text",
   tooltip = null,
   validate = true,
+  readOnly = false,
 }) => (
   <div className="flex flex-col gap-1 relative group">
     <div className="flex items-center gap-1">
@@ -51,13 +52,16 @@ const InputGroup = ({
           name={name}
           value={value ?? ""}
           onChange={onChange}
+          readOnly={readOnly}
           className={`w-full px-3 py-2.5 border ${
             validate
               ? value == ""
                 ? "border-red-400"
                 : "border-gray-300"
               : "border-gray-300"
-          } rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all bg-white shadow-sm text-sm`}
+          } rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all ${
+            !readOnly ? "bg-white" : "bg-gray-100"
+          } shadow-sm text-sm`}
           placeholder="..."
         />
       )

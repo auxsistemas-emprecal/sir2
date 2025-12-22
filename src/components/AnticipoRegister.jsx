@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Save, Printer, DollarSign } from "lucide-react";
+import { Save, Printer, DollarSign, BrushCleaning } from "lucide-react";
 import InputGroup from "./InputGroup";
 import InputAutosuggest from "./InputAutosuggest.jsx";
 import { searchTercero } from "../assets/services/apiService.js";
@@ -96,18 +96,21 @@ function numeroALetras(num) {
 
   return convertir(num);
 }
+
 // ====================================================================
 
 export default function AnticipoRegister({
   terceros,
   paymentTypes,
   onSaveAnticipo,
+  onLoadAnticipoByNoComprobante,
+  noComprobanteToEdit,
 }) {
-  const [formData, setFormData] = useState({
+  const initialFormData = {
     fecha: new Date().toISOString().split("T")[0],
     idTercero: "",
     tipo: "Anticipo",
-    remisiones: "",
+    remisiones: "[]",
     valor: "",
     no_ingreso: "",
     tercero: "",
@@ -117,17 +120,130 @@ export default function AnticipoRegister({
     concepto: "",
     idTipoPago: "1",
     tipoPago:
-    
-
       paymentTypes.length > 0
-        ? paymentTypes[0].name
+        ? paymentTypes[0].tipo_pago
         : "Seleccionar tipo de pago",
     pagado: 0,
     sumaLetras: "",
-  });
+  };
 
+  const [formData, setFormData] = useState(initialFormData);
   const [sugerencias, setSugerencias] = useState([]);
+  const [loading, setLoading] = useState(false);
 
+  // Variable para determinar el modo: Registro (false) o Ver/Editar (true)
+  const isEditing = !!noComprobanteToEdit;
+
+  // ================================================================
+  //  useEffect para calcular Suma en Letras (Escucha cambios en 'valor')
+  // ================================================================
+  useEffect(() => {
+    const valorNumerico = parseFloat(formData.valor) || 0;
+
+    if (valorNumerico > 0) {
+      const texto = numeroALetras(valorNumerico);
+      const nuevaSumaLetras = `${texto} PESOS `.toUpperCase();
+
+      // Solo actualiza si el texto realmente cambió para evitar bucles infinitos
+      if (formData.sumaLetras !== nuevaSumaLetras) {
+        setFormData((prev) => ({
+          ...prev,
+          sumaLetras: nuevaSumaLetras,
+        }));
+      }
+    } else {
+      if (formData.sumaLetras !== "") {
+        setFormData((prev) => ({ ...prev, sumaLetras: "" }));
+      }
+    }
+  }, [formData.valor, formData.sumaLetras]);
+
+  // ===================================================================
+  // useEffect para Cargar Datos (Modo Ver/Editar)
+  // ====================================================================
+  useEffect(() => {
+    const loadData = async () => {
+      if (!noComprobanteToEdit || !paymentTypes || !terceros) return;
+
+      try {
+        setLoading(true);
+        const anticipo = await onLoadAnticipoByNoComprobante(
+          noComprobanteToEdit
+        );
+
+        if (anticipo) {
+          const tipoEncontrado = paymentTypes.find(
+            (t) => String(t.idTipoPago) === String(anticipo.idTipoPago)
+          );
+
+          const terceroLocal = terceros.find(
+            (ter) =>
+              String(ter.id || ter.idTercero) === String(anticipo.idTercero)
+          );
+
+          // Calculamos letras para la carga inicial
+          const v = parseFloat(anticipo.valor || anticipo.valorAnticipo) || 0;
+          const letrasIniciales =
+            v > 0 ? `${numeroALetras(v)} PESOS`.toUpperCase() : "";
+
+          const baseData = {
+            ...initialFormData,
+            noComprobante: anticipo.no_ingreso || anticipo.noComprobante,
+            no_ingreso: anticipo.no_ingreso || anticipo.noComprobante,
+            fecha: anticipo.fecha
+              ? anticipo.fecha.split("T")[0]
+              : initialFormData.fecha,
+            idTercero: anticipo.idTercero,
+            tipo: anticipo.tipo || "Anticipo",
+            valor: String(anticipo.valor || anticipo.valorAnticipo || ""),
+            cedula: anticipo.cedula || "",
+            telefono: anticipo.telefono || "",
+            direccion: anticipo.direccion || "",
+            concepto: anticipo.concepto || "",
+            idTipoPago: String(anticipo.idTipoPago || "1"),
+            tipoPago: tipoEncontrado ? tipoEncontrado.tipo_pago : "Efectivo",
+            tercero: terceroLocal
+              ? terceroLocal.nombre
+              : anticipo.tercero || "",
+            sumaLetras: letrasIniciales,
+          };
+
+          // Búsqueda de tercero externa
+          if (
+            !terceroLocal &&
+            anticipo.idTercero &&
+            typeof searchTercero === "function"
+          ) {
+            try {
+              const terceroData = await searchTercero(anticipo.idTercero);
+              if (terceroData && terceroData.length > 0) {
+                baseData.tercero = terceroData[0].nombre;
+              }
+            } catch (err) {
+              console.error("Error búsqueda tercero:", err);
+            }
+          }
+
+          setFormData(baseData);
+        }
+      } catch (error) {
+        console.error("Error cargando anticipo:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [
+    noComprobanteToEdit,
+    onLoadAnticipoByNoComprobante,
+    paymentTypes,
+    terceros,
+  ]);
+
+  //================================================================
+  // useEffect para calcular Suma en Letras
+  //================================================================
   useEffect(() => {
     const valor = parseFloat(formData.valor) || 0;
 
@@ -147,7 +263,6 @@ export default function AnticipoRegister({
     setFormData((prev) => ({
       ...prev,
       tercero: tercero.tercero,
-      // Usamos los campos del objeto tercero para llenar el formulario
       cedula: tercero.cedula || "",
       telefono: tercero.telefono || "",
       direccion: tercero.direccion || "",
@@ -156,37 +271,49 @@ export default function AnticipoRegister({
   };
 
   const handleChange = (e) => {
+    if (isEditing) return; //  Bloquea cambios si está en modo Ver
+
     const { name, value } = e.target;
-    if (name == "tercero") {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-        idTercero: e.target.completeObject.id_tercero,
-        tercero: value,
-        cedula: e.target.completeObject.cedula,
-        telefono: e.target.completeObject.telefono,
-        direccion: e.target.completeObject.direccion,
-      }));
+
+    // Manejo especial para Autocompletado de Tercero
+    if (name === "tercero") {
+      const completeObject = e.target.completeObject;
+      if (completeObject) {
+        setFormData((prev) => ({
+          ...prev,
+          idTercero: completeObject.id_tercero,
+          tercero: value,
+          cedula: completeObject.cedula || "",
+          telefono: completeObject.telefono || "",
+          direccion: completeObject.direccion || "",
+        }));
+      } else {
+        setFormData((prev) => ({ ...prev, [name]: value }));
+      }
       return;
     }
-    if (name == "tipoPago") {
-      const idTipoPago = paymentTypes.filter((el) => el.tipo_pago == value)[0]
-        .idTipoPago;
-      console.log(idTipoPago);
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-        idTipoPago: String(idTipoPago),
-      }));
+
+    if (name === "tipoPago") {
+      const selectedPayment = paymentTypes.find((el) => el.tipo_pago === value);
+      if (selectedPayment) {
+        setFormData((prev) => ({
+          ...prev,
+          [name]: value,
+          idTipoPago: String(selectedPayment.idTipoPago),
+        }));
+      }
       return;
     }
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (isEditing) return; //  Bloquea si está en modo Ver
+
     if (
       !formData.tercero ||
       !formData.valor ||
@@ -198,34 +325,26 @@ export default function AnticipoRegister({
 
     const record = {
       estado: "VIGENTE",
-      id: Date.now(),
+      noComprobante: Date.now(),
       ...formData,
       valor: parseFloat(formData.valor),
+      remisiones: "[]",
     };
 
-    onSaveAnticipo(record);
-    console.log(record)
+    const response = await onSaveAnticipo(record);
+    console.log(response);
     alert("Anticipo registrado y guardado exitosamente.");
 
-    // Limpiar formulario
-    setFormData((prev) => ({
-      ...prev,
-      fecha: new Date().toISOString().split("T")[0],
-      idTercero: "",
-      tipo: "Anticipo",
-      remisiones: "",
-      valor: "",
-      no_ingreso: "",
-      tercero: "",
-      cedula: "",
-      telefono: "",
-      direccion: "",
-      concepto: "",
-      idTipoPago: paymentTypes.length > 0 ? paymentTypes[0].name : "Efectivo",
-      pagado: 0,
-      sumaLetras: "",
-      
-    }));
+    if (response && response[0]) {
+      setFormData((prev) => ({
+        ...prev,
+        no_ingreso: response[0].no_ingreso,
+      }));
+    }
+  };
+
+  const handleClean = () => {
+    setFormData(initialFormData);
   };
 
   const formatCurrency = (val) =>
@@ -233,7 +352,7 @@ export default function AnticipoRegister({
       style: "currency",
       currency: "COP",
       minimumFractionDigits: 0,
-    }).format(val);
+    }).format(val || 0);
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
@@ -241,8 +360,10 @@ export default function AnticipoRegister({
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden sticky top-4">
         <div className="bg-linear-to-r from-gray-50 to-white px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-            <DollarSign size={18} className="text-emerald-600" /> Registro de
-            Anticipo
+            <DollarSign size={18} className="text-emerald-600" />
+            {isEditing
+              ? `Anticipo No. ${formData.no_ingreso}`
+              : "Registro de Anticipo"}
           </h2>
         </div>
 
@@ -253,6 +374,7 @@ export default function AnticipoRegister({
             type="date"
             value={formData.fecha}
             onChange={handleChange}
+            readOnly={isEditing}
           />
 
           {/* TERCERO con Autocompletado */}
@@ -265,12 +387,13 @@ export default function AnticipoRegister({
               searchEndpoint={searchTercero}
               textSuggestor="nombre"
               itemsKeys="id_tercero"
+              readOnly={isEditing}
             />
-            {sugerencias.length > 0 && (
+            {sugerencias.length > 0 && !isEditing && (
               <ul className="absolute z-20 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto mt-1">
                 {sugerencias.map((t) => (
                   <li
-                    key={t.cedula || t.id}
+                    key={t.cedula || t.id_tercero}
                     onClick={() => seleccionarTercero(t)}
                     className="px-4 py-2 text-sm cursor-pointer hover:bg-emerald-100"
                   >
@@ -283,13 +406,12 @@ export default function AnticipoRegister({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Campos de solo lectura, se llenan con seleccionarTercero */}
             <InputGroup
               label="Cédula"
               name="cedula"
               value={formData.cedula}
               onChange={handleChange}
-              readOnly={true}
+              readOnly={isEditing}
               tooltip="Se llena automáticamente al seleccionar el Tercero."
             />
             <InputGroup
@@ -297,7 +419,7 @@ export default function AnticipoRegister({
               name="telefono"
               value={formData.telefono}
               onChange={handleChange}
-              readOnly={true}
+              readOnly={isEditing}
               tooltip="Se llena automáticamente al seleccionar el Tercero."
             />
           </div>
@@ -307,7 +429,7 @@ export default function AnticipoRegister({
             name="direccion"
             value={formData.direccion}
             onChange={handleChange}
-            readOnly={true}
+            readOnly={isEditing}
             tooltip="Se llena automáticamente al seleccionar el Tercero."
           />
 
@@ -320,6 +442,7 @@ export default function AnticipoRegister({
             value={formData.valor}
             onChange={handleChange}
             placeholder="0.00"
+            readOnly={isEditing}
           />
 
           <InputGroup
@@ -327,6 +450,7 @@ export default function AnticipoRegister({
             name="concepto"
             value={formData.concepto}
             onChange={handleChange}
+            readOnly={isEditing}
           />
 
           <div className="grid grid-cols-2 gap-4">
@@ -338,18 +462,17 @@ export default function AnticipoRegister({
                 name="tipoPago"
                 value={formData.tipoPago}
                 onChange={handleChange}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
+                disabled={isEditing}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm disabled:bg-gray-100 disabled:text-gray-600"
               >
-                <option key={9999} value={0} selected>
+                <option key={9999} value={"Seleccionar tipo de pago"} disabled>
                   {"Seleccionar tipo de pago"}
                 </option>
-                {paymentTypes.map((p) => {
-                  return (
-                    <option key={p.idTipoPago} value={p.tipo_pago}>
-                      {p.tipo_pago}
-                    </option>
-                  );
-                })}
+                {paymentTypes.map((p) => (
+                  <option key={p.idTipoPago} value={p.tipo_pago}>
+                    {p.tipo_pago}
+                  </option>
+                ))}
               </select>
             </div>
             <InputGroup
@@ -357,20 +480,38 @@ export default function AnticipoRegister({
               name="no_ingreso"
               value={formData.no_ingreso}
               onChange={handleChange}
+              validate={false}
+              readOnly={true}
             />
           </div>
 
-          <button
-            onClick={handleSave}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer mt-4"
-          >
-            <Save size={20} /> Guardar Anticipo
-          </button>
+          {!isEditing && (
+            <div className="space-y-3">
+              <button
+                onClick={handleSave}
+                className={`w-full ${
+                  formData.no_ingreso
+                    ? "bg-gray-500 cursor-not-allowed"
+                    : "bg-emerald-600 hover:bg-emerald-700"
+                } text-white font-bold py-3 px-4 rounded-lg shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2 mt-4`}
+                disabled={!!formData.no_ingreso}
+              >
+                <Save size={20} /> Guardar Anticipo
+              </button>
+
+              <button
+                onClick={handleClean}
+                className={`w-full bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg shadow-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer`}
+              >
+                <BrushCleaning size={20} /> Limpiar Formulario
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* VISTA PREVIA (Comprobante de Ingreso) */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4" id="anticipo-preview">
         <div className="flex justify-between items-center px-1">
           <h3 className="font-bold text-gray-600 flex items-center gap-2">
             <Printer size={18} /> Vista Previa Comprobante
@@ -383,7 +524,6 @@ export default function AnticipoRegister({
           </button>
         </div>
 
-        {/* Diseño del Comprobante de Ingreso */}
         <div
           className="bg-white shadow-2xl p-8 min-h-[400px] text-xs md:text-sm text-black font-sans border border-gray-200 relative"
           id="anticipo-print"
@@ -391,7 +531,7 @@ export default function AnticipoRegister({
           <div className="border-2 border-black">
             <div className="grid grid-cols-3 border-b-2 border-black font-bold text-center">
               <div className="col-span-2 p-3 text-xl">
-                EMPRECAL S.A. NIT. 804.002.739-01
+                EMPRECAL S.A.S NIT. 804.002.739-1
                 <div className="text-xs font-normal mt-1 text-gray-600">
                   Kilómetro 9 vía San Gil - Socorro | Cel. 3138880467
                 </div>
@@ -401,7 +541,7 @@ export default function AnticipoRegister({
                   Comprobante de Ingreso No.
                 </span>
                 <span className="text-2xl font-extrabold text-red-600">
-                  {formData.no_ingreso || "0"}
+                  {formData.no_ingreso}
                 </span>
               </div>
             </div>

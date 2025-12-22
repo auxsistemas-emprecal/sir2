@@ -15,6 +15,10 @@ import {
   fetchMovimiento,
   updateMovimiento,
   updateMovimientoItems,
+  fetchPagosPorNombre,
+  fetchPagosPorNoIngreso,
+  updatePago,
+  fetchCreditosPorNombre
 } from "../assets/services/apiService";
 
 // --- Nuevo Componente: Modal de Confirmación ---
@@ -67,6 +71,7 @@ export default function InvoiceGenerator({
   setIsEditing,
   usuario,
   setActiveTab,
+  // isSaving,
 }) {
   const [nextRemisionNumber, setNextRemisionNumber] = useState(null);
 
@@ -155,6 +160,14 @@ export default function InvoiceGenerator({
     total: 0,
   });
   const [showIVARet, setShowIVARet] = useState(true);
+  const [estadoDeCuenta, setEstadoDeCuenta] = useState({
+    no_ingreso: 0,
+    valorAnticipo: 0,
+    valorRemision: 0,
+    remisiones: [],
+    valorRemisiones: 0,
+    saldo: 0,
+  });
 
   //---------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------
@@ -163,8 +176,10 @@ export default function InvoiceGenerator({
   const [showModal, setShowModal] = useState(false);
   const [lastSavedRecord, setLastSavedRecord] = useState(null); // Almacena el registro guardado para la vista/impresión
   const [preciosEspeciales, setPreciosEspeciales] = useState([]);
-  // ----------------------
-
+  const [pagosAnticipados, setPagosAnticipados] = useState([]);
+  // ----------------------------------------------------------------------
+  //-----------------------------------------------------------------------
+  const [isLoading, setIsLoading] = useState(false);
   //=====================================================================================
   //                                EDITAR
   //======================================================================================
@@ -187,7 +202,6 @@ export default function InvoiceGenerator({
 
         setFormData(() => {
           const { fecha, hora } = getColombiaDateParts(editingMovement.fecha);
-
           const toReturn = {
             // Mantenemos las claves de la cabecera que vienen de la prop
             ...editingMovement,
@@ -199,13 +213,20 @@ export default function InvoiceGenerator({
             incluirRet: Boolean(editingMovement.incluir_ret),
             fecha: fecha,
             horaLlegada: hora,
+            tipoPago: editingMovement.tipo_pago,
 
             // Si tiene un campo 'date', asegúrese de que el formato sea el correcto para el input.
           };
-
+          console.log(toReturn);
           return toReturn;
         });
-
+        fetchPagosPorNombre(editingMovement.tercero).then((resp) => {
+          console.log(
+            `Pagos anticipados del tercero: ${editingMovement.tercero}`,
+            resp
+          );
+          setPagosAnticipados(resp);
+        });
         // -----------------------------------------------------------
         // B. Inicializar los Ítems (lineItems)
         // -----------------------------------------------------------
@@ -224,10 +245,6 @@ export default function InvoiceGenerator({
 
         setLineItems(mappedItems);
       } else {
-        // 🛑 Lógica para LIMPIAR al salir de la edición
-        // Si no hay datos de edición, resetear a los valores iniciales por defecto.<
-        // Esto es crucial cuando se pasa de EDITAR a CREAR una nueva remisión.
-        // (Asumiendo que tiene un initialFormData y un initialLineItems o [] para el reset)
         setFormData(initialFormData);
         setLineItems([]);
       }
@@ -281,6 +298,32 @@ export default function InvoiceGenerator({
     hacerCalculos();
   }, [lineItems, formData.incluirIva, formData.incluirRet]);
 
+  useEffect(() => {
+    setEstadoDeCuenta((prev) => ({
+      ...prev,
+      valorRemision: calculos.total,
+    }));
+  }, [calculos]);
+
+  useEffect(() => {
+    const selectedPago = pagosAnticipados.find((p) =>
+      eval(p.remisiones).includes(formData.remision)
+    );
+    console.log("Pago seleccionado: ", selectedPago);
+    setEstadoDeCuenta((prev) => ({
+      ...prev,
+      no_ingreso: selectedPago ? selectedPago.no_ingreso : 0,
+      valorAnticipo: selectedPago ? selectedPago.valor : 0,
+      valorRemision: calculos.total,
+      remisiones: selectedPago ? selectedPago.remisiones : "[]",
+      valorRemisiones: selectedPago
+        ? selectedPago.valorRemisiones - editingMovement.total
+        : 0,
+      saldo: selectedPago ? selectedPago.saldo + editingMovement.total : 0,
+      pagoOriginal: selectedPago,
+    }));
+  }, [pagosAnticipados]);
+
   const handleChange = (e) => {
     const { name, value, type, checked, completeObject } = e.target;
 
@@ -290,13 +333,16 @@ export default function InvoiceGenerator({
         ...prev,
         conductor: completeObject.conductor,
         cedula: completeObject.cedula,
-        // CORRECCIÓN AQUÍ: Usar directamente el id del objeto seleccionado
         idTercero: completeObject.id_tercero,
         tercero: completeObject.nombre,
         telefono: completeObject.telefono,
         direccion: completeObject.direccion,
         placa: completeObject.placa,
       }));
+      fetchPagosPorNombre(completeObject.nombre).then((resp) => {
+        console.log("Pagos anticipados del tercero:", resp);
+        setPagosAnticipados(resp);
+      });
       return;
     } else if (name == "tercero") {
       // Si el usuario escribe manualmente y no selecciona de la lista,
@@ -310,6 +356,7 @@ export default function InvoiceGenerator({
 
     // 2. Lógica para Tipo de Pago
     if (name === "tipoPago") {
+      if (isEditing) return;
       // Buscar el ID en la lista de tipos de pago
       const selectedPayment = paymentTypes.find(
         (p) => (p.tipo_pago || p.name) === value
@@ -321,7 +368,27 @@ export default function InvoiceGenerator({
         // CORRECCIÓN AQUÍ: Usar el ID del pago encontrado
         idTipoPago: selectedPayment?.idTipoPago || selectedPayment?.id || null,
       }));
+      // Manejo de pagos anticipados de ese tercero
       return;
+    }
+
+    // Lógica si es pago anticipado
+    if (name === "no_ingreso") {
+      if (isEditing) return;
+      const selectedPago = pagosAnticipados.find(
+        (p) => p.no_ingreso.toString() === value
+      );
+      console.log("Pago seleccionado: ", selectedPago);
+      setEstadoDeCuenta((prev) => ({
+        ...prev,
+        no_ingreso: selectedPago ? selectedPago.no_ingreso : 0,
+        valorAnticipo: selectedPago ? selectedPago.valor : 0,
+        valorRemision: calculos.total,
+        remisiones: selectedPago ? selectedPago.remisiones : "[]",
+        valorRemisiones: selectedPago ? selectedPago.valorRemisiones : 0,
+        saldo: selectedPago ? selectedPago.saldo : 0,
+        pagoOriginal: selectedPago,
+      }));
     }
 
     // 3. Inputs normales
@@ -415,20 +482,55 @@ export default function InvoiceGenerator({
   };
 
   // --- NUEVA FUNCIÓN: Abrir modal de confirmación ---
+  // validaciones
   const handleAttemptSave = () => {
-    // 1. Validaciones básicas: cliente y al menos una cantidad > 0
+    // Si ya está cargando, no hacer nada
+    if (isLoading) return;
+
+    // 1. Validaciones básicas
     const anyCantidad = lineItems.some(
       (li) => (parseFloat(li.cantidad) || 0) > 0
     );
+    const checkSaldo = estadoDeCuenta.valorRemision > estadoDeCuenta.saldo;
+
     if (!formData.tercero || !anyCantidad) {
       alert(
-        "Asegúrate de ingresar Cliente/Tercero y al menos una Cantidad mayor a 0 en los materiales."
+        "Asegúrate de ingresar Cliente/Tercero y al menos una Cantidad mayor a 0."
       );
       return;
     }
-    // 2. Si las validaciones pasan, mostramos el modal
+
+    if (formData.tipoPago === "Pago por anticipado" && checkSaldo) {
+      alert(
+        "El Cliente no cuenta con saldo suficiente para hacer esta remisión."
+      );
+      return;
+    }
+
+    // 2. Abrir el modal de confirmación
     setShowModal(true);
   };
+  // const handleAttemptSave = () => {
+  //   // 1. Validaciones básicas: cliente y al menos una cantidad > 0
+  //   const anyCantidad = lineItems.some(
+  //     (li) => (parseFloat(li.cantidad) || 0) > 0
+  //   );
+  //   const checkSaldo = estadoDeCuenta.valorRemision > estadoDeCuenta.saldo;
+  //   if (!formData.tercero || !anyCantidad) {
+  //     alert(
+  //       "Asegúrate de ingresar Cliente/Tercero y al menos una Cantidad mayor a 0 en los materiales."
+  //     );
+  //     return;
+  //   }
+  //   if (formData.tipoPago === "Pago por anticipado" && checkSaldo) {
+  //     alert(
+  //       "El Cliente no cuenta con saldo suficiente para hacer esta remisión."
+  //     );
+  //     return;
+  //   }
+  //   // 2. Si las validaciones pasan, mostramos el modal
+  //   setShowModal(true);
+  // };
 
   function compararDatos(
     datosOriginales = {},
@@ -457,61 +559,92 @@ export default function InvoiceGenerator({
     }
     return cambios;
   }
+  //====================================================================================================================
 
+  //====================================================================================================================
   const handleConfirmSave = async () => {
+    setIsLoading(true); // [NUEVO] Inicia el estado de carga al presionar "Aceptar" en el modal
     setShowModal(false);
 
-    const totalCubicaje = lineItems.reduce((acc, item) => {
-      return acc + (Number(item.cantidad) || 0);
-    }, 0);
-
-    // 1. Crear fecha combinada localmente
-    const fechaLocal = new Date(`${formData.fecha}T${formData.horaLlegada}:00`);
-
-    // 2. Restar el offset de la zona horaria para neutralizar la conversión a UTC
-    const fechaISO = new Date(
-      fechaLocal.getTime() - fechaLocal.getTimezoneOffset() * 60000
-    ).toISOString();
-
-    let remisionLastNumber = await fetchLastRemisionNumber();
-    remisionLastNumber = remisionLastNumber.data[0]?.remision || 0;
-
-    const payloadHeader = {
-      fecha: fechaISO,
-      remision: remisionLastNumber + 1,
-      idTercero: formData.idTercero ? parseInt(formData.idTercero) : 0,
-      idTipoPago: formData.idTipoPago,
-      placa: formData.placa || "",
-      direccion: formData.direccion || "",
-      observacion: formData.observacion || "",
-      conductor: formData.conductor || "",
-      cedula: formData.cedula || "",
-      telefono: formData.telefono || "",
-      no_ingreso: "",
-      estado: "VIGENTE",
-      pagado: 0,
-      factura: 0,
-      cubicaje: totalCubicaje,
-      subtotal: Number(calculos.subtotal) || 0,
-      iva: Number(calculos.iva) || 0,
-      retencion: Number(calculos.retencion) || 0,
-      total: Number(calculos.total) || 0,
-      incluir_iva: formData.incluirIva ? 1 : 0,
-      incluir_ret: formData.incluirRet ? 1 : 0,
-      tercero: formData.tercero,
-      horaLlegada: formData.horaLlegada,
-      telefono: formData.telefono,
-      tipoPago: formData.tipoPago,
-    };
-
-    console.log("Payload: ", payloadHeader);
-
     try {
+      const totalCubicaje = lineItems.reduce((acc, item) => {
+        return acc + (Number(item.cantidad) || 0);
+      }, 0);
+
+      // 1. Crear fecha combinada localmente
+      const fechaLocal = new Date(
+        `${formData.fecha}T${formData.horaLlegada}:00`
+      );
+
+      // 2. Restar el offset de la zona horaria
+      const fechaISO = new Date(
+        fechaLocal.getTime() - fechaLocal.getTimezoneOffset() * 60000
+      ).toISOString();
+
+      let remisionLastNumber = await fetchLastRemisionNumber();
+      remisionLastNumber = (remisionLastNumber.data[0]?.remision || 0) + 1;
+
+      let estadoDeCuentaPayload = null;
+      if (formData.tipoPago === "Pago por anticipado") {
+        estadoDeCuentaPayload = await fetchPagosPorNoIngreso(
+          estadoDeCuenta.no_ingreso
+        );
+        estadoDeCuentaPayload = estadoDeCuentaPayload[0];
+        let remisionesArray = eval(estadoDeCuentaPayload.remisiones);
+        if (!isEditing) remisionesArray.push(remisionLastNumber);
+        estadoDeCuentaPayload = {
+          ...estadoDeCuentaPayload,
+          remisiones: `[${remisionesArray}]`,
+          valorRemisiones:
+            estadoDeCuentaPayload.valorRemisiones +
+            estadoDeCuenta.valorRemision -
+            (editingMovement?.total || 0),
+        };
+        delete estadoDeCuentaPayload.saldo;
+      }
+
+      let creditoActualizarPayload = null;
+      if (isEditing && formData.idTipoPago === 4) {
+        const respuestaCredito = await fetchCreditosPorNombre(formData.tercero);
+        const creditoEnDB = respuestaCredito[0];
+        creditoActualizarPayload = {
+          ...creditoEnDB,
+          valorRemisiones: creditoEnDB.valorRemisiones - formData.total,
+        };
+      }
+
+      const payloadHeader = {
+        fecha: fechaISO,
+        remision: remisionLastNumber,
+        idTercero: formData.idTercero ? parseInt(formData.idTercero) : 0,
+        idTipoPago: formData.idTipoPago,
+        placa: formData.placa || "",
+        direccion: formData.direccion || "",
+        observacion: formData.observacion || "",
+        conductor: formData.conductor || "",
+        cedula: formData.cedula || "",
+        telefono: formData.telefono || "",
+        no_ingreso: "",
+        estado: "VIGENTE",
+        pagado: 0,
+        factura: 0,
+        cubicaje: totalCubicaje,
+        subtotal: Number(calculos.subtotal) || 0,
+        iva: Number(calculos.iva) || 0,
+        retencion: Number(calculos.retencion) || 0,
+        total: Number(calculos.total) || 0,
+        incluir_iva: formData.incluirIva ? 1 : 0,
+        incluir_ret: formData.incluirRet ? 1 : 0,
+        tercero: formData.tercero,
+        horaLlegada: formData.horaLlegada,
+        tipoPago: formData.tipoPago,
+        estadoDeCuenta: estadoDeCuentaPayload ?? null,
+      };
+
       if (isEditing) {
         setIsEditing(false);
         let datosActualizar = {
           ...formData,
-          // IMPORTANTE: Usar la misma lógica de fechaISO aquí también
           fecha: fechaISO,
           incluir_iva: +formData.incluirIva,
           incluir_ret: +formData.incluirRet,
@@ -523,20 +656,33 @@ export default function InvoiceGenerator({
           total: Number(calculos.total) || 0,
         };
 
-        const usuario = localStorage.getItem("usuario") || "desconocido";
+        const usuario = localStorage.getItem("usuario") || "Desconocido";
 
         let cambios = compararDatos(editingMovement, datosActualizar, usuario);
+
         lineItems.forEach((item, idx) => {
           cambios += compararDatos(editingItems.data[idx], item, usuario);
           updateMovimientoItems(editingMovement.remision, item);
         });
+
         datosActualizar = {
           ...datosActualizar,
           observacion: datosActualizar.observacion + cambios,
         };
-        updateMovimiento(editingMovement.remision, datosActualizar);
-        window.location.reload();
-        setActiveTab("generador");
+
+        await updateMovimiento(editingMovement.remision, datosActualizar);
+        if (estadoDeCuentaPayload) {
+          await updatePago(
+            estadoDeCuentaPayload.no_ingreso,
+            estadoDeCuentaPayload
+          );
+        }
+        if (creditoActualizarPayload) {
+          await updateCredito(
+            creditoActualizarPayload.idCredito,
+            creditoActualizarPayload
+          );
+        }
       } else {
         const responseSaved = await onSave(payloadHeader, lineItems);
         setFormData({
@@ -547,34 +693,130 @@ export default function InvoiceGenerator({
 
       // --- LÓGICA DE ÉXITO ---
       setLastSavedRecord({ ...payloadHeader, materiales: lineItems });
-
-      // Reseteo del formulario
-      // setFormData((prev) => {
-      //   const nextRemisionNumber = parseInt(prev.remision, 10);
-      //   const nextRemision = isNaN(nextRemisionNumber)
-      //     ? prev.remision
-      //     : (nextRemisionNumber + 1).toString();
-      //   return {
-      //     ...prev,
-      //     remision: nextRemision,
-      //     observacion: "",
-      //     conductor: "",
-      //     placa: "",
-      //     tercero: "",
-      //     idTercero: null,
-      //     telefono: "",
-      //     direccion: "",
-      //     cedula: "",
-      //     factura: 0,
-      //   };
-      // });
-      // setLineItems(initialLineItems);
     } catch (error) {
       console.error("Fallo al guardar:", error);
-      // Muestra el mensaje de error que propagó App.jsx
       alert(`❌ Error al guardar: ${error.message}`);
+    } finally {
+      setIsLoading(false); // [NUEVO] IMPORTANTE: Siempre apaga el cargando, falle o funcione.
     }
   };
+
+  // const handleConfirmSave = async () => {
+  //   setShowModal(false);
+
+  //   const totalCubicaje = lineItems.reduce((acc, item) => {
+  //     return acc + (Number(item.cantidad) || 0);
+  //   }, 0);
+
+  //   // 1. Crear fecha combinada localmente
+  //   const fechaLocal = new Date(`${formData.fecha}T${formData.horaLlegada}:00`);
+
+  //   // 2. Restar el offset de la zona horaria para neutralizar la conversión a UTC
+  //   const fechaISO = new Date(
+  //     fechaLocal.getTime() - fechaLocal.getTimezoneOffset() * 60000
+  //   ).toISOString();
+
+  //   let remisionLastNumber = await fetchLastRemisionNumber();
+  //   remisionLastNumber = (remisionLastNumber.data[0]?.remision || 0) + 1;
+
+  //   let estadoDeCuentaPayload = null;
+  //   if (formData.tipoPago === "Pago por anticipado") {
+  //     estadoDeCuentaPayload = await fetchPagosPorNoIngreso(
+  //       estadoDeCuenta.no_ingreso
+  //     );
+  //     estadoDeCuentaPayload = estadoDeCuentaPayload[0];
+  //     let remisionesArray = eval(estadoDeCuentaPayload.remisiones);
+  //     if (!isEditing) remisionesArray.push(remisionLastNumber);
+  //     estadoDeCuentaPayload = {
+  //       ...estadoDeCuentaPayload,
+  //       remisiones: `[${remisionesArray}]`,
+  //       valorRemisiones:
+  //         estadoDeCuentaPayload.valorRemisiones +
+  //         estadoDeCuenta.valorRemision -
+  //         (editingMovement?.total || 0),
+  //     };
+  //     delete estadoDeCuentaPayload.saldo;
+  //   }
+  //   console.log("Estados de cuenta payload:", estadoDeCuentaPayload);
+
+  //   const payloadHeader = {
+  //     fecha: fechaISO,
+  //     remision: remisionLastNumber,
+  //     idTercero: formData.idTercero ? parseInt(formData.idTercero) : 0,
+  //     idTipoPago: formData.idTipoPago,
+  //     placa: formData.placa || "",
+  //     direccion: formData.direccion || "",
+  //     observacion: formData.observacion || "",
+  //     conductor: formData.conductor || "",
+  //     cedula: formData.cedula || "",
+  //     telefono: formData.telefono || "",
+  //     no_ingreso: "",
+  //     estado: "VIGENTE",
+  //     pagado: 0,
+  //     factura: 0,
+  //     cubicaje: totalCubicaje,
+  //     subtotal: Number(calculos.subtotal) || 0,
+  //     iva: Number(calculos.iva) || 0,
+  //     retencion: Number(calculos.retencion) || 0,
+  //     total: Number(calculos.total) || 0,
+  //     incluir_iva: formData.incluirIva ? 1 : 0,
+  //     incluir_ret: formData.incluirRet ? 1 : 0,
+  //     tercero: formData.tercero,
+  //     horaLlegada: formData.horaLlegada,
+  //     telefono: formData.telefono,
+  //     tipoPago: formData.tipoPago,
+  //     estadoDeCuenta: estadoDeCuentaPayload ?? null,
+  //   };
+
+  //   console.log("Payload: ", payloadHeader);
+
+  //   try {
+  //     if (isEditing) {
+  //       setIsEditing(false);
+  //       let datosActualizar = {
+  //         ...formData,
+  //         fecha: fechaISO,
+  //         incluir_iva: +formData.incluirIva,
+  //         incluir_ret: +formData.incluirRet,
+  //         factura: 0,
+  //         observacion: formData.observacion,
+  //         subtotal: Number(calculos.subtotal) || 0,
+  //         iva: Number(calculos.iva) || 0,
+  //         retencion: Number(calculos.retencion) || 0,
+  //         total: Number(calculos.total) || 0,
+  //       };
+
+  //       const usuario = localStorage.getItem("usuario") || "Desconocido";
+
+  //       let cambios = compararDatos(editingMovement, datosActualizar, usuario);
+  //       lineItems.forEach((item, idx) => {
+  //         cambios += compararDatos(editingItems.data[idx], item, usuario);
+  //         updateMovimientoItems(editingMovement.remision, item);
+  //       });
+  //       datosActualizar = {
+  //         ...datosActualizar,
+  //         observacion: datosActualizar.observacion + cambios,
+  //       };
+  //       updateMovimiento(editingMovement.remision, datosActualizar);
+  //       updatePago(estadoDeCuentaPayload.no_ingreso, estadoDeCuentaPayload);
+  //     } else {
+  //       const responseSaved = await onSave(payloadHeader, lineItems);
+  //       setFormData({
+  //         ...payloadHeader,
+  //         remision: responseSaved.data[0].remision,
+  //       });
+  //     }
+
+  //     // --- LÓGICA DE ÉXITO ---
+  //     setLastSavedRecord({ ...payloadHeader, materiales: lineItems });
+  //   } catch (error) {
+  //     console.error("Fallo al guardar:", error);
+  //     // Muestra el mensaje de error que propagó App.jsx
+  //     alert(`❌ Error al guardar: ${error.message}`);
+  //   }
+  // };
+  //====================================================================================================================
+  //====================================================================================================================
 
   const handleNewRecord = () => {
     const currentParts = getColombiaDateParts(); // Usar la función auxiliar
@@ -608,6 +850,8 @@ export default function InvoiceGenerator({
     })),
     ...calculos,
   };
+
+  ////////////////////////////////////////////////////////////////////////////////////
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
@@ -923,8 +1167,100 @@ export default function InvoiceGenerator({
                     ))}
                   </select>
                 </div>
-              </div>
 
+                {formData.tipoPago === "Pago por anticipado" && (
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
+                      No. de ingreso
+                    </label>
+                    <select
+                      name="no_ingreso"
+                      value={estadoDeCuenta.no_ingreso}
+                      onChange={(e) => handleChange(e)}
+                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
+                    >
+                      <option key={0} value={0}>
+                        Seleccione un ingreso
+                      </option>
+                      {pagosAnticipados.map((p) => (
+                        <option key={p.no_ingreso} value={p.no_ingreso}>
+                          {p.no_ingreso} - {formatCurrency(p.valor)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+              {formData.tipoPago === "Pago por anticipado" &&
+                estadoDeCuenta.no_ingreso !== 0 && (
+                  <div className="col-span-2 bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-2 shadow-inner">
+                    <div className="flex items-center gap-2 mb-3 border-b border-emerald-100 pb-2">
+                      <div className="bg-emerald-500 p-1.5 rounded-lg text-white">
+                        <FileText size={16} />
+                      </div>
+                      <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-tight">
+                        No. ingreso {estadoDeCuenta.no_ingreso}
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-6 text-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-emerald-600 font-medium">
+                          Valor Anticipo:
+                        </span>
+                        <span className="text-gray-700 font-mono">
+                          {formatCurrency(estadoDeCuenta.valorAnticipo)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-emerald-600 font-medium">
+                          Saldo Actual:
+                        </span>
+                        <span className="text-gray-700 font-mono">
+                          {formatCurrency(estadoDeCuenta.saldo)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-emerald-600 font-medium">
+                          Valor de Remisiones:
+                        </span>
+                        <span className="text-gray-700 font-mono">
+                          {formatCurrency(estadoDeCuenta.valorRemisiones)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center col-span-1 md:col-span-2 pt-2 border-t border-emerald-100">
+                        <span className="text-emerald-800 font-bold">
+                          Saldo tras esta remisión:
+                        </span>
+                        <span
+                          className={`text-base font-bold font-mono ${
+                            estadoDeCuenta.saldo -
+                              estadoDeCuenta.valorRemision <
+                            0
+                              ? "text-red-600 animate-pulse"
+                              : "text-emerald-700"
+                          }`}
+                        >
+                          {formatCurrency(
+                            estadoDeCuenta.saldo - estadoDeCuenta.valorRemision
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    {estadoDeCuenta.remisiones !== "[]" && (
+                      <div className="mt-3 text-[10px] text-emerald-600 italic bg-white/50 p-2 rounded border border-emerald-50">
+                        <span className="font-bold">
+                          Remisiones vinculadas:
+                        </span>{" "}
+                        {estadoDeCuenta.remisiones}
+                      </div>
+                    )}
+                  </div>
+                )}
               <InputGroup
                 label="Observaciones"
                 name="observacion"
@@ -934,8 +1270,53 @@ export default function InvoiceGenerator({
                 type="textarea"
               />
 
-              {/* El botón ahora llama a handleAttemptSave para mostrar el modal */}
               <button
+                onClick={handleAttemptSave}
+                disabled={isLoading} // Bloquea el botón mientras carga
+                className={`w-full text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer mt-4 ${
+                  isLoading
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : isEditing
+                    ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
+                    : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
+                }`}
+              >
+                {isLoading ? (
+                  <>
+                    {/* Círculo de carga (Spinner) */}
+                    <svg
+                      className="animate-spin h-5 w-5 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    <span>PROCESANDO...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    <span>
+                      {isEditing ? "GUARDAR CAMBIOS" : "GUARDAR REMISIÓN"}
+                    </span>
+                  </>
+                )}
+              </button>
+              {/* El botón ahora llama a handleAttemptSave para mostrar el modal */}
+              {/* <button
                 onClick={handleAttemptSave}
                 className={`w-full text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer mt-4 ${
                   isEditing
@@ -945,7 +1326,7 @@ export default function InvoiceGenerator({
               >
                 <Save size={20} />{" "}
                 {isEditing ? "GUARDAR CAMBIOS" : "GUARDAR REMISIÓN"}
-              </button>
+              </button> */}
             </>
           )}
         </div>

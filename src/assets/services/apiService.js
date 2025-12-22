@@ -1,13 +1,18 @@
 // Importa token
 import { getToken } from "./authService";
 
-const BASE_URL = "http://192.168.150.13:8000";
+const BASE_URL = "http://192.168.150.8:8000";
 
 // Headers con token
-const getAuthHeaders = () => ({
-  "Content-Type": "application/json",
-  Authorization: `Bearer ${getToken()}`,
-});
+// Headers con token con log de depuración
+const getAuthHeaders = () => {
+  const token = getToken();
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+};
+
 // ====================================================================
 // 🟩 MOVIMIENTOS
 // ====================================================================
@@ -135,6 +140,27 @@ export const updateMovimiento = async (remision, movimiento) => {
     headers: getAuthHeaders(),
     body: JSON.stringify(movimiento),
   });
+
+  if (!res.ok) {
+    const errorDetails = await res.json();
+    console.error(
+      `Error ${res.status} al actualizar movimiento ${remision}:`,
+      errorDetails
+    );
+    throw new Error(`Fallo la actualización (Estatus: ${res.status})`);
+  }
+
+  return await res.json();
+};
+
+export const cambiarEstadoMovimiento = async (remision, nuevo_estado) => {
+  const res = await fetch(
+    `${BASE_URL}/movimientos/cambiarEstado/${remision}?nuevo_estado=${nuevo_estado}`,
+    {
+      method: "PUT",
+      headers: getAuthHeaders(),
+    }
+  );
 
   if (!res.ok) {
     const errorDetails = await res.json();
@@ -526,6 +552,89 @@ export const fetchPagos = async () => {
   }
 };
 
+export const fetchPagosPorNombre = async (nombreTercero = "") => {
+  try {
+    const res = await fetch(
+      `${BASE_URL}/pagos/anticiposPorNombre/${nombreTercero}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+
+    if (!res.ok) {
+      console.error(`Error ${res.status} al obtener pagos`);
+      return [];
+    }
+
+    const json = await res.json();
+    // El backend retorna { status: "success", data: [...] }
+    return Array.isArray(json.data) ? json.data : [];
+  } catch (error) {
+    console.error("Error obteniendo pagos:", error);
+    return [];
+  }
+};
+
+export const fetchPagosPorNoIngreso = async (no_ingreso = "") => {
+  try {
+    const res = await fetch(`${BASE_URL}/pagos/${no_ingreso}`, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!res.ok) {
+      console.error(`Error ${res.status} al obtener pagos`);
+      return [];
+    }
+
+    const json = await res.json();
+    // El backend retorna { status: "success", data: [...] }
+    return Array.isArray(json.data) ? json.data : [];
+  } catch (error) {
+    console.error("Error obteniendo pagos:", error);
+    return [];
+  }
+};
+
+export const pagoPorRemision = async (remision = "") => {
+  try {
+    const res = await fetch(`${BASE_URL}/pagos/pagoPorRemision/${remision}`, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!res.ok) {
+      console.error(`Error ${res.status} al obtener pagos`);
+      return [];
+    }
+
+    const json = await res.json();
+    // El backend retorna { status: "success", data: [...] }
+    return Array.isArray(json.data) ? json.data : [];
+  } catch (error) {
+    console.error("Error obteniendo pagos:", error);
+    return [];
+  }
+};
+
+export const fetchPagoUltimo = async () => {
+  try {
+    const res = await fetch(`${BASE_URL}/pagos/ultimo`, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!res.ok) {
+      console.error(`Error ${res.status} al obtener ultimo pago`);
+      return [];
+    }
+
+    const json = await res.json();
+    // El backend retorna { status: "success", data: [...] }
+    return Array.isArray(json.data) ? json.data : [];
+  } catch (error) {
+    console.error("Error obteniendo pagos:", error);
+    return [];
+  }
+};
+
 /**
  * Crea un nuevo pago.
  * Endpoint: POST /pagos
@@ -549,18 +658,18 @@ export const createPago = async (pago) => {
 
 /**
  * Actualiza un pago existente.
- * Endpoint: PUT /pagos/{id_pago}
- * @param {number} id_pago - ID del pago a actualizar
+ * Endpoint: PUT /pagos/{no_ingreso}
+ * @param {number} no_ingreso - ID del pago a actualizar
  * @param {object} pago - Datos actualizados
  */
-export const updatePago = async (id_pago, pago) => {
-  if (!id_pago) {
-    console.error("❌ ERROR: updatePago recibió id_pago = ", id_pago);
-    throw new Error("ID de pago inválido (id_pago es undefined o null)");
+export const updatePago = async (no_ingreso, pago) => {
+  if (!no_ingreso) {
+    console.error("❌ ERROR: updatePago recibió no_ingreso = ", no_ingreso);
+    throw new Error("ID de pago inválido (no_ingreso es undefined o null)");
   }
 
   try {
-    const res = await fetch(`${BASE_URL}/pagos/${id_pago}`, {
+    const res = await fetch(`${BASE_URL}/pagos/${no_ingreso}`, {
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify(pago),
@@ -575,7 +684,7 @@ export const updatePago = async (id_pago, pago) => {
 
     return await res.json();
   } catch (error) {
-    console.error(`❌ Error actualizando pago ${id_pago}:`, error);
+    console.error(`❌ Error actualizando pago ${no_ingreso}:`, error);
     throw error;
   }
 };
@@ -599,6 +708,82 @@ export const deletePago = async (id) => {
   }
 };
 
+/* ============================================================
+   🟨 CRÉDITOS
+   ============================================================ */
+
+/**
+ * Obtiene todos los créditos.
+ * Endpoint: GET /creditos
+ */
+export const fetchCreditos = async () => {
+  try {
+    const response = await fetch(`${BASE_URL}/creditos`, {
+      headers: getAuthHeaders(),
+    });
+    const json = await response.json();
+    return json.status === "success" ? json.data : [];
+  } catch (error) {
+    console.error("Error obteniendo créditos:", error);
+    return [];
+  }
+};
+
+/**
+ * Obtiene todos los créditos de un tercero.
+ * Endpoint: GET /creditos/buscarPorNombreTercero/{nombreTercero}
+ */
+export const fetchCreditosPorNombre = async (nombreTercero = "") => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/creditos/buscarPorNombreTercero/${nombreTercero}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    const json = await response.json();
+    return json.status === "success" ? json.data : [];
+  } catch (error) {
+    console.error("Error obteniendo créditos:", error);
+    return [];
+  }
+};
+
+/**
+ * Crea un nuevo registro de crédito.
+ * Endpoint: POST /creditos
+ */
+export const createCredito = async (creditoData) => {
+  try {
+    const response = await fetch(`${BASE_URL}/creditos`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(creditoData),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Error al crear crédito:", error);
+    throw error;
+  }
+};
+
+/**
+ * Actualiza un crédito existente.
+ * Endpoint: PUT /creditos/{idCredito}
+ */
+export const updateCredito = async (idCredito, creditoData) => {
+  try {
+    const response = await fetch(`${BASE_URL}/creditos/${idCredito}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(creditoData),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Error al actualizar crédito:", error);
+    throw error;
+  }
+};
 
 // ... (código existente)
 
@@ -620,7 +805,7 @@ export const createGasto = async (gasto) => {
 
   try {
     const response = await fetch(`${BASE_URL}/gastos`, {
-      method: 'POST',
+      method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(gasto),
     });
@@ -628,7 +813,10 @@ export const createGasto = async (gasto) => {
     if (!response.ok) {
       // Intenta leer el mensaje de error del backend
       const errorData = await response.json();
-      throw new Error(errorData.message || `Error en la respuesta del servidor: ${response.status}`);
+      throw new Error(
+        errorData.message ||
+          `Error en la respuesta del servidor: ${response.status}`
+      );
     }
 
     const json = await response.json();
@@ -639,406 +827,129 @@ export const createGasto = async (gasto) => {
   }
 };
 
-// --------------------------archivo anterior hasta el 01/12 9:30-------------------------
-
-// // Importa token
-// import { getToken } from "./authService";
-// // import axios from "axios";  // Solo si lo usas para algo
-
-// const BASE_URL = "http://192.168.150.4:8000";
-
-// // headers con token
-// const getAuthHeaders = () => ({
-//   "Content-Type": "application/json",
-//   Authorization: `Bearer ${getToken()}`,
-// });
-
-// /* ============================================================
-//    🟩 TERCEROS
-//    ============================================================ */
-
-// export const fetchTerceros = async () => {
-//   try {
-//     const response = await fetch(`${BASE_URL}/terceros`, {
-//       headers: getAuthHeaders(),
-//     });
-
-//     const json = await response.json();
-//     return Array.isArray(json.data) ? json.data : [];
-//   } catch (error) {
-//     console.error("Error obteniendo terceros:", error);
-//     return [];
-//   }
-// };
-
-// export const createTercero = async (tercero) => {
-//   const res = await fetch(`${BASE_URL}/terceros`, {
-//     method: "POST",
-//     headers: getAuthHeaders(),
-//     body: JSON.stringify(tercero),
-//   });
-//   return await res.json();
-// };
-
-// export const updateTercero = async (id, tercero) => {
-//   const res = await fetch(`${BASE_URL}/terceros/${id}`, {
-//     method: "PUT",
-//     headers: getAuthHeaders(),
-//     body: JSON.stringify(tercero),
-//   });
-//   return await res.json();
-// };
-
-// /* ============================================================
-//    🟦 PLACAS
-//    ============================================================ */
-
-// export const fetchPlacas = async () => {
-//   try {
-//     const res = await fetch(`${BASE_URL}/placas`, {
-//       headers: getAuthHeaders(),
-//     });
-//     const json = await res.json();
-//     return Array.isArray(json.data) ? json.data : [];
-//   } catch (error) {
-//     console.error("Error obteniendo placas:", error);
-//     return [];
-//   }
-// };
-
-// /* ============================================================
-//    🟥 MATERIALES
-//    ============================================================ */
-
-// export const fetchMateriales = async () => {
-//   try {
-//     const res = await fetch(`${BASE_URL}/materiales`, {
-//       headers: getAuthHeaders(),
-//     });
-
-//     const json = await res.json();
-//     return Array.isArray(json.data) ? json.data : [];
-//   } catch (error) {
-//     console.error("Error obteniendo materiales:", error);
-//     return [];
-//   }
-// };
-
-// export const createMaterial = async (material) => {
-//   const res = await fetch(`${BASE_URL}/materiales`, {
-//     method: "POST",
-//     headers: getAuthHeaders(),
-//     body: JSON.stringify(material),
-//   });
-
-//   return await res.json();
-// };
-
-// export const updateMaterial = async (id, material) => {
-//   const res = await fetch(`${BASE_URL}/materiales/${id}`, {
-//     method: "PUT",
-//     headers: getAuthHeaders(),
-//     body: JSON.stringify(material),
-//   });
-
-//   return await res.json();
-// };
-
-// export const deleteMaterial = async (id) => {
-//   const res = await fetch(`${BASE_URL}/materiales/${id}`, {
-//     method: "DELETE",
-//     headers: getAuthHeaders(),
-//   });
-
-//   return await res.json();
-// };
-
-// /* ============================================================
-//    🟪 TIPOS DE PAGO
-//    ============================================================ */
-
-// export const fetchTiposPago = async () => {
-//   try {
-//     const res = await fetch(`${BASE_URL}/tiposPago`, {
-//       headers: getAuthHeaders(),
-//     });
-
-//     const json = await res.json();
-//     return Array.isArray(json.data) ? json.data : [];
-//   } catch (error) {
-//     console.error("Error obteniendo tipos de pago:", error);
-//     return [];
-//   }
-// };
-
-// export const createTipoPago = async (tipo) => {
-//   const res = await fetch(`${BASE_URL}/tiposPago`, {
-//     method: "POST",
-//     headers: getAuthHeaders(),
-//     body: JSON.stringify(tipo),
-//   });
-
-//   return await res.json();
-// };
-
-// export const updateTipoPago = async (id, tipo) => {
-//   const res = await fetch(`${BASE_URL}/tiposPago/${id}`, {
-//     method: "PUT",
-//     headers: getAuthHeaders(),
-//     body: JSON.stringify(tipo),
-//   });
-
-//   return await res.json();
-// };
-
-// export const deleteTipoPago = async (id) => {
-//   const res = await fetch(`${BASE_URL}/tiposPago/${id}`, {
-//     method: "DELETE",
-//     headers: getAuthHeaders(),
-//   });
-
-//   return await res.json();
-// };
-
-// ------------------ archivo corregido desde el 02/12 8:00------------------
-
-// // Importar la función para obtener el token desde authService
-// import { getToken } from "./authService";
-// // import axios from "axios";
-
-// const BASE_URL = "http://192.168.150.4:8000";
-
-// // Función auxiliar para construir los headers de autorización
-// const getAuthHeaders = () => ({
-//   "Content-Type": "application/json",
-//   Authorization: `Bearer ${getToken()}`,
-// });
-
-// /* ============================================================
-//    🟩 TERCEROS (CORREGIDO)
-//    ============================================================ */
-
-// export const fetchTerceros = async () => {
-//   if (!getToken()) {
-//     console.error("Token de autenticación faltante para fetchTerceros.");
-//     return [];
-//   }
-
-//   try {
-//     const response = await fetch(`${BASE_URL}/terceros`, {
-//       method: "GET",
-//       headers: getAuthHeaders(),
-//     });
-
-//     if (!response.ok) {
-//       throw new Error(`Error ${response.status}: No autorizado o error servidor.`);
-//     }
-
-//     const json = await response.json();
-
-//     // Aseguramos devolver SIEMPRE un ARRAY
-//     return Array.isArray(json.data) ? json.data : [];
-//   } catch (error) {
-//     console.error("Fallo al obtener terceros:", error);
-//     return [];
-//   }
-// };
-
-// export const createTercero = async (tercero) => {
-//   try {
-//     const response = await fetch(`${BASE_URL}/terceros`, {
-//       method: "POST",
-//       headers: getAuthHeaders(),
-//       body: JSON.stringify(tercero),
-//     });
-
-//     return await response.json();
-//   } catch (error) {
-//     console.error("Error creando tercero:", error);
-//     throw error;
-//   }
-// };
-
-// export const updateTercero = async (id, tercero) => {
-//   try {
-//     const response = await fetch(`${BASE_URL}/terceros/${id}`, {
-//       method: "PUT",
-//       headers: getAuthHeaders(),
-//       body: JSON.stringify(tercero),
-//     });
-
-//     return await response.json();
-//   } catch (error) {
-//     console.error("Error actualizando tercero:", error);
-//     throw error;
-//   }
-// };
-
-// /* ============================================================
-//    🟦 MATERIALES
-//    ============================================================ */
-
-// export const fetchMateriales = async () => {
-//   try {
-//     const res = await axios.get(`${API_URL}/materiales`);
-//     return res.data;
-//   } catch (error) {
-//     console.error("Error obteniendo materiales:", error);
-//     throw error;
-//   }
-// };
-
-// export const createMaterial = async (material) => {
-//   try {
-//     const res = await axios.post(`${API_URL}/materiales`, material);
-//     return res.data;
-//   } catch (error) {
-//     console.error("Error creando material:", error);
-//     throw error;
-//   }
-// };
-
-// export const updateMaterial = async (id, material) => {
-//   try {
-//     const res = await axios.put(`${API_URL}/materiales/${id}`, material);
-//     return res.data;
-//   } catch (error) {
-//     console.error("Error actualizando material:", error);
-//     throw error;
-//   }
-// };
-
-// /* ============================================================
-//    🟪 PLACAS
-//    ============================================================ */
-
-// export const fetchPlacas = async () => {
-//   if (!getToken()) {
-//     console.error("Token de autenticación faltante para fetchPlacas.");
-//     return [];
-//   }
-
-//   try {
-//     const response = await fetch(`${BASE_URL}/placas`, {
-//       headers: getAuthHeaders(),
-//     });
-
-//     if (!response.ok) {
-//       throw new Error(
-//         `Error ${response.status}: Acceso no autorizado o fallo del servidor.`
-//       );
-//     }
-
-//     const json = await response.json();
-//     return Array.isArray(json.data) ? json.data : [];
-//   } catch (error) {
-//     console.error("Fallo al obtener placas:", error);
-//     return [];
-//   }
-// };
-
-// // -------------------------archivo anterior hasta el 01/12 -------------------------
-
-// // Importar la función para obtener el token desde authService
-// import { getToken } from "./authService";
-// // import axios from "axios";
-
-// const BASE_URL = "http://192.168.150.4:8000";
-
-// // Función auxiliar para construir los headers de autorización
-// const getAuthHeaders = () => ({
-//   "Content-Type": "application/json",
-//   // Obtiene el token guardado y lo añade al header de Authorization
-//   Authorization: `Bearer ${getToken()}`,
-// });
-
-// /**
-//  * Obtiene la lista de terceros desde la API (Requiere Token).
-//  */
-// export const fetchTerceros = async () => {
-//   // 🛑 Validación CRÍTICA: Bloquear la llamada si no hay token
-//   if (!getToken()) {
-//     console.error("Token de autenticación faltante para fetchTerceros.");
-//     return [];
-//   }
-
-//   try {
-//     const response = await fetch(`${BASE_URL}/terceros`, {
-//       headers: getAuthHeaders(), // <-- USANDO EL TOKEN
-//     });
-
-//     if (!response.ok) {
-//       // Manejar errores de seguridad (401) o de servidor
-//       throw new Error(
-//         `Error ${response.status}: Acceso no autorizado o fallo del servidor.`
-//       );
-//     }
-
-//     const data = await response.json();
-//     return data;
-//   } catch (error) {
-//     console.error("Fallo al obtener terceros:", error);
-//     return [];
-//   }
-// };
-
-// // -------------------- MATERIALES --------------------
-
-// export const fetchMateriales = async () => {
-//     try {
-//         const res = await axios.get(`${API_URL}/materiales`);
-//         return res.data;
-//     } catch (error) {
-//         console.error("Error obteniendo materiales:", error);
-//         throw error;
-//     }
-// };
-
-// export const createMaterial = async (material) => {
-//     try {
-//         const res = await axios.post(`${API_URL}/materiales`, material);
-//         return res.data;
-//     } catch (error) {
-//         console.error("Error creando material:", error);
-//         throw error;
-//     }
-// };
-
-// export const updateMaterial = async (id, material) => {
-//     try {
-//         const res = await axios.put(`${API_URL}/materiales/${id}`, material);
-//         return res.data;
-//     } catch (error) {
-//         console.error("Error actualizando material:", error);
-//         throw error;
-//     }
-// };
-
-// /**
-//  * Obtiene la lista de placas (vehículos) desde la API (Requiere Token).
-//  */
-// export const fetchPlacas = async () => {
-//   // 🛑 Validación CRÍTICA: Bloquear la llamada si no hay token
-//   if (!getToken()) {
-//     console.error("Token de autenticación faltante para fetchPlacas.");
-//     return [];
-//   }
-
-//   try {
-//     const response = await fetch(`${BASE_URL}/placas`, {
-//       headers: getAuthHeaders(), // <-- USANDO EL TOKEN
-//     });
-
-//     if (!response.ok) {
-//       throw new Error(
-//         `Error ${response.status}: Acceso no autorizado o fallo del servidor.`
-//       );
-//     }
-
-//     const data = await response.json();
-//     return data;
-//   } catch (error) {
-//     console.error("Fallo al obtener placas:", error);
-//     return [];
-//   }
-// };
+// ====================================================================
+// 📊 CUADRE DE CAJA (PERSISTENCIA)
+// ====================================================================
+
+/**
+ * Guarda el resumen del cuadre de caja del día.
+ * Endpoint: POST /cuadreCaja
+ * @param {object} datos - Datos del resumen diario.
+ */
+export const saveCuadreCaja = async (datos) => {
+  if (!getToken()) {
+    console.error("Token de autenticación faltante para saveCuadreCaja.");
+    throw new Error("Autenticación requerida.");
+  }
+
+  try {
+    const response = await fetch(`${BASE_URL}/cuadreCaja/`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(datos),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.message || `Error al guardar el cuadre: ${response.status}`
+      );
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error en saveCuadreCaja:", error);
+    throw error;
+  }
+};
+
+/**
+ * Busca el cuadre guardado para una fecha específica.
+ * Endpoint: GET /cuadreCaja/{fecha}
+ * @param {string} fecha - Fecha en formato YYYY-MM-DD
+ */
+export const fetchCuadreByFecha = async (fecha) => {
+  try {
+    const response = await fetch(`${BASE_URL}/cuadreCaja/${fecha}`, {
+      headers: getAuthHeaders(),
+    });
+
+    // Si la API devuelve 404, significa que no se ha hecho el cuadre ese día.
+    if (response.status === 404) return null;
+
+    if (!response.ok) {
+      throw new Error(`Error al obtener cuadre: ${response.status}`);
+    }
+
+    const json = await response.json();
+    return json.data;
+  } catch (error) {
+    console.error(`Error obteniendo cuadre para la fecha ${fecha}:`, error);
+    return null;
+  }
+};
+
+// ====================================================================
+// 🧾 GASTOS DIARIOS
+// ====================================================================
+
+export const createGastoDiario = async (gasto) => {
+  if (!getToken()) {
+    throw new Error("Autenticación requerida");
+  }
+
+  try {
+    const response = await fetch(`${BASE_URL}/gastos_diarios/`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        descripcion: gasto.descripcion,
+        valor: Number(gasto.valor),
+        observacion: gasto.observacion || "",
+        fecha: gasto.fecha,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.message || `Error guardando gasto (${response.status})`
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("❌ Error en createGastoDiario:", error);
+    throw error;
+  }
+};
+
+// ====================================================================
+// 🧮 ARQUEO / CUADRE DIARIO DE CAJA
+// ====================================================================
+
+export const createCuadreDiario = async (arqueo) => {
+  if (!getToken()) {
+    throw new Error("Autenticación requerida");
+  }
+
+  try {
+    const response = await fetch(`${BASE_URL}/cuadresDiarios/`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(arqueo),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.message ||
+          `Error guardando cuadre diario (${response.status})`
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("❌ Error en createCuadreDiario:", error);
+    throw error;
+  }
+};

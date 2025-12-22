@@ -1,9 +1,8 @@
 @import "tailwindcss";
 
-
 @media print {
-
-  html, body {
+  html,
+  body {
     background: #ffffff !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -11,13 +10,19 @@
     padding: 0 !important;
   }
 
-  /* Oculta todo excepto la factura */
+  /* Oculta todo excepto los contenedores de impresión */
   body * {
     visibility: hidden !important;
   }
 
+  /* Hacemos visibles AMBOS componentes (Factura y Anticipo) */
   #invoice-print,
-  #invoice-print * {
+  #invoice-print *,
+  #anticipo-print,      
+  #anticipo-print *,
+  #cuadre-print,
+  #cuadre-print * 
+  {  
     visibility: visible !important;
   }
 
@@ -29,18 +34,22 @@
     background: transparent !important;
   }
 
-  /* -------- FACTURA MEDIA CARTA, ESCALADA Y CENTRADA -------- */
-  #invoice-print {
+  /* -------- ESTILOS COMPARTIDOS PARA IMPRESIÓN -------- */
+  /* Aplicamos las mismas reglas de posicionamiento a ambos IDs */
+  #invoice-print, 
+  #anticipo-print,
+  #cuadre-print {       /* <--- AGREGADO */
     position: absolute;
     top: 0;
 
-    /* CENTRAR factura en la hoja */
+    /* CENTRAR en la hoja */
     left: 50% !important;
 
     width: 100% !important;
     max-width: 21.59cm !important;
 
-    height: 14cm !important;
+    /* height: 14cm !important;  <-- OJO: Anticipo puede ser más corto, quizás quieras quitar el height fijo o usar min-height */
+    min-height: 14cm !important; 
     background: #ffffff !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -51,7 +60,7 @@
     /* Ajuste de escala */
     transform-origin: top center !important;
 
-    /* Ajustar escala para que NO se corte → tú puedes modificar este valor */
+    /* Ajustar escala para que NO se corte */
     transform: translateX(-50%) scale(0.78) !important;
   }
 
@@ -62,4 +71,3 @@
     background: #ffffff !important;
   }
 }
-

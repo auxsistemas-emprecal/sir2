@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Menu } from "lucide-react";
 import "./index.css";
 
@@ -9,11 +9,11 @@ import ConfigurationPanel from "./components/ConfigurationPanel.jsx";
 import Terceros from "./components/terceros.jsx";
 import PreciosEspeciales from "./components/PreciosEspeciales.jsx";
 import AnticipoRegister from "./components/AnticipoRegister.jsx";
-// import AnticiposArchived from "./components/AnticiposArchived.jsx";
 import HistorialAnticipos from "./components/HistorialAnticipos.jsx";
 import AuthForm from "./components/AuthForm.jsx";
 import MovimientosPage from "./components/MovimientosPage.jsx";
 import CuadreCaja from "./components/CuadreCaja.jsx";
+import CreditosTable from "./components/CreditosTable.jsx";
 
 // Servicios
 import { getToken, logoutUser } from "./assets/services/authService.js";
@@ -29,10 +29,16 @@ import {
   createMovimientoItem,
   fetchPreciosEspeciales,
   createPago,
-  fetchPagos, // IMPORTADO para cargar anticipos
-  updatePago, // IMPORTADO para cargar anticipos
+  fetchPagos,
+  updatePago,
   fetchLastRemisionNumber,
-  fetchMovimientoItemsByRemision, // 🆕 Importado para edición
+  fetchMovimientoItemsByRemision,
+  fetchPagoUltimo,
+  cambiarEstadoMovimiento,
+  fetchCreditos,
+  fetchCreditosPorNombre,
+  createCredito,
+  updateCredito,
 } from "./assets/services/apiService.js";
 
 export default function App() {
@@ -43,13 +49,22 @@ export default function App() {
   const [materials, setMaterials] = useState([]);
   const [paymentTypes, setPaymentTypes] = useState([]);
   const [movements, setMovements] = useState([]);
-  const [anticipos, setAnticipos] = useState([]); // Array para guardar los anticipos
+  const [anticipos, setAnticipos] = useState([]);
   const [terceros, setTerceros] = useState([]);
+  const [reloadAnticipos, setReloadAnticipos] = useState(0);
+  const [creditos, setCreditos] = useState([]);
 
-  // 🆕 ESTADOS PARA LA EDICIÓN
+  // 🆕 ESTADO PARA FILTRADO MASIVO DESDE ANTICIPOS
+  const [filtroRemisionesMasivo, setFiltroRemisionesMasivo] = useState(null);
+
+  // 🆕 ESTADOS PARA LA EDICIÓN DE MOVIMIENTOS
   const [editingMovement, setEditingMovement] = useState(null);
   const [editingItems, setEditingItems] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
+
+  // ESTADO PARA LA EDICIÓN DE ANTICIPOS
+  const [anticipoNoComprobanteToEdit, setAnticipoNoComprobanteToEdit] =
+    useState(null);
 
   // =======================================================
   // 🟢 FUNCIÓN CENTRALIZADA PARA CARGAR MOVIMIENTOS
@@ -65,15 +80,71 @@ export default function App() {
 
   // =======================================================
   // 🟢 FUNCIÓN CENTRALIZADA PARA CARGAR ANTICIPOS (PAGOS)
-  // <<< NUEVA FUNCIÓN >>>
   // =======================================================
   const loadAnticipos = async () => {
     try {
       const data = await fetchPagos();
-      setAnticipos(data); // Actualiza el estado 'anticipos' con los datos de la API
+      setAnticipos(data);
     } catch (error) {
       console.error("Fallo al cargar anticipos:", error);
     }
+  };
+
+  // =======================================================
+  // 🟢 FUNCIÓN DE CARGA DE ANTICIPO POR ID (Para AnticipoRegister)
+  // =======================================================
+  const loadAnticipoDataFunction = useCallback(async (noComprobante) => {
+    try {
+      console.log("🔍 Buscando comprobante número:", noComprobante);
+      const allAnticipos = await fetchPagos();
+
+      const anticipo = allAnticipos.find((p) => {
+        const idEnRegistro = String(p.no_ingreso || p.noComprobante || "");
+        return idEnRegistro === String(noComprobante);
+      });
+
+      if (!anticipo) {
+        console.error(`❌ Error: El comprobante ${noComprobante} no existe.`);
+      } else {
+        console.log("✅ Anticipo encontrado con éxito:", anticipo);
+      }
+
+      return anticipo;
+    } catch (error) {
+      console.error(
+        "Error crítico al cargar anticipo por NoComprobante:",
+        error
+      );
+      throw error;
+    }
+  }, []);
+
+  // =======================================================
+  // 🟢 FUNCIÓN CENTRALIZADA PARA CARGAR CRÉDITOS
+  // =======================================================
+  const loadCreditos = async () => {
+    try {
+      const data = await fetchCreditos();
+      setCreditos(data);
+    } catch (error) {
+      console.error("Fallo al cargar créditos:", error);
+    }
+  };
+
+  // =======================================================
+  // 🟢 FUNCIÓN PARA MANEJAR EL CLIC EN EL BOTÓN NARANJA DE REMISIONES
+  // =======================================================
+  const handleVerRemisionesAsociadas = (listaNumeros) => {
+    setFiltroRemisionesMasivo(listaNumeros);
+    setActiveTab("movimientos");
+  };
+
+  // =======================================================
+  // 🟢 FUNCIÓN PARA INICIAR LA EDICIÓN DE ANTICIPO
+  // =======================================================
+  const startEditingAnticipo = (noComprobante) => {
+    setAnticipoNoComprobanteToEdit(noComprobante);
+    setActiveTab("anticipo");
   };
 
   // =======================================================
@@ -82,13 +153,14 @@ export default function App() {
   useEffect(() => {
     const token = getToken();
     setIsAuthenticated(!!token);
+    const savedUser = localStorage.getItem("usuario");
+    if (savedUser) setUsuario(savedUser);
   }, []);
 
   // ================================
   // CARGA GLOBAL DE CATÁLOGOS Y MOVIMIENTOS
   // ================================
   useEffect(() => {
-    // Solo cargamos datos si el usuario está autenticado
     if (!isAuthenticated) return;
 
     (async () => {
@@ -96,11 +168,10 @@ export default function App() {
         const tp = await fetchTiposPago();
         const ter = await fetchTerceros();
         const mat = await fetchMateriales();
-        // const pla = await fetchPlacas();
 
-        // Cargar movimientos al inicio
         await loadMovimientos();
-        await loadAnticipos(); // <<< CAMBIO CLAVE: Cargar anticipos al inicio >>>
+        await loadAnticipos();
+        await loadCreditos();
 
         setPaymentTypes(tp);
         setTerceros(ter);
@@ -111,7 +182,6 @@ export default function App() {
     })();
   }, [isAuthenticated]);
 
-  // Guardar el usuario en localStorage
   useEffect(() => {
     if (usuario) {
       localStorage.setItem("usuario", usuario);
@@ -121,7 +191,6 @@ export default function App() {
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
     setActiveTab("inicio");
-    console.log("Usuario autenticado:", usuario);
   };
 
   const handleLogout = () => {
@@ -129,21 +198,14 @@ export default function App() {
     setIsAuthenticated(false);
   };
 
-  // ==================================================
-  // 🟢 FUNCIÓN DE EDICIÓN: Carga de Datos y Redirección (Sin cambios)
-  // ==================================================
   const startEditing = async (movementHeader) => {
     try {
-      // 1. Guardar la cabecera del movimiento en edición
       setEditingMovement(movementHeader);
       setIsEditing(true);
-      // 2. Obtener los ítems asociados a esa remisión
       const itemsData = await fetchMovimientoItemsByRemision(
         movementHeader.remision
       );
       setEditingItems(itemsData);
-
-      // 3. Cambiar la pestaña activa al generador de remisiones
       setActiveTab("generador");
     } catch (error) {
       console.error("Error al cargar datos para edición:", error);
@@ -151,23 +213,52 @@ export default function App() {
     }
   };
 
-  // ==================================================
-  // 🟢 FUNCIÓN DE CREACIÓN/GUARDADO (Mantenida)
-  // ==================================================
   const addMovement = async (headerData, itemsList) => {
     try {
-      console.log("1. Guardando Cabecera...", headerData);
-
-      // PASO A: Crear la cabecera (/movimientos)
-      console.log("Creando movimiento con datos:", headerData);
-      console.log("Items a guardar:", itemsList);
-      const responseHeader = await createMovimiento(headerData);
+      if (headerData.idTipoPago === 1 || headerData.idTipoPago === 2) {
+        headerData.pagado = 1;
+      }
+      await createMovimiento(headerData);
       const remisionCreada = await fetchLastRemisionNumber();
-      console.log(
-        "2. Cabecera creada. Remisión ID:",
-        remisionCreada.data[0].remision
-      );
-      // PASO B: Recorrer los materiales   guardarlos uno por uno (/movimientoItems)
+
+      if (headerData.estadoDeCuenta) {
+        await updatePago(
+          headerData.estadoDeCuenta.no_ingreso,
+          headerData.estadoDeCuenta
+        );
+      }
+
+      console.log(headerData);
+      if (headerData.idTipoPago === 4) {
+        let creditoPayload = null;
+        console.log(headerData.tercero)
+        const resultadoCredito = await fetchCreditosPorNombre(
+          headerData.tercero
+        );
+        console.log("Resultado credito: ", resultadoCredito);
+        if (resultadoCredito.length === 0) {
+          creditoPayload = {
+            idTercero: headerData.idTercero,
+            tercero: headerData.tercero,
+            remisiones: `[${remisionCreada.data[0].remision}]`,
+            valorRemisiones: headerData.total,
+            pagado: 0,
+          };
+          await createCredito(creditoPayload);
+        } else {
+          let remisionesCredito = eval(resultadoCredito[0].remisiones);
+          console.log(resultadoCredito[0])
+          remisionesCredito.push(remisionCreada.data[0].remision);
+          creditoPayload = {
+            ...resultadoCredito[0],
+            remisiones: `[${remisionesCredito}]`,
+            valorRemisiones:
+              resultadoCredito[0].valorRemisiones + headerData.total,
+          };
+          console.log(creditoPayload)
+          await updateCredito(resultadoCredito[0].idCredito, creditoPayload);
+        }
+      }
 
       for (const item of itemsList) {
         const payloadItem = {
@@ -180,13 +271,8 @@ export default function App() {
           retencion: 0,
           total: Number(item.cantidad) * Number(item.precioUnitario),
         };
-
         await createMovimientoItem(payloadItem);
       }
-
-      console.log("3. Todos los items guardados correctamente.");
-
-      // PASO C: Recargar todo para que MovimientosPage se actualice
       await loadMovimientos();
       return remisionCreada;
     } catch (error) {
@@ -194,275 +280,121 @@ export default function App() {
       throw error;
     }
   };
-  // --------------------- Fin addMovement ---------------------
-
-  // ==================================================
-  // 🟢 FUNCIÓN DE CREACIÓN (Anticipos)
-  // ==================================================
 
   const addAnticipo = async (newAnticipo) => {
-    // console.log(newAnticipo);
     await createPago(newAnticipo);
-    await loadAnticipos(); // <<< CAMBIO CLAVE: Recargar anticipos después de crear uno >>>
+    const ultimoPago = await fetchPagoUltimo();
+    await loadAnticipos();
+    setAnticipoNoComprobanteToEdit(null);
     setActiveTab("archivedAnticipos");
+    return ultimoPago;
   };
-// // ==================================================
-// // 🟢 FUNCIÓN DE TOGGLE DE ESTADO (Anticipos)
-// // ==================================================
 
-// const handleToggleAnticipoEstado = async (pagoCompleto) => {
-//     const id_pago = pagoCompleto.id_pago || pagoCompleto.id;
-//     const nuevoEstado =
-//         pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
+  const handleToggleAnticipoEstado = async (pagoCompleto) => {
+    const id_pago = pagoCompleto.noComprobante;
+    const nuevoEstado =
+      pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
+    const idTipoPago = paymentTypes.find(
+      (tipo) => tipo.tipo_pago === pagoCompleto.tipoPago
+    )?.idTipoPago;
 
-//     if (
-//         !window.confirm(
-//             `¿Está seguro de cambiar el estado del pago ID ${id_pago} a "${nuevoEstado}"?`
-//         )
-//     ) {
-//         return;
-//     }
-
-//     try {
-//         // 2. CREACIÓN DEL PAYLOAD CON MAPEO COMPLETO
-//         // Creamos un nuevo objeto usando los nombres de las columnas SQL que la API espera.
-//         const payload = {
-// id_pago: id_pago,
-//     estado: nuevoEstado, 
-
-//     // Campos que ya coincidían por nombre (Solo se asegura el dato):
-//     fecha: pagoCompleto.fecha,
-//     idTercero: pagoCompleto.idTercero, 
-//     tipo: pagoCompleto.tipo, 
-//     no_ingreso: pagoCompleto.no_ingreso, 
-//     cedula: pagoCompleto.cedula, 
-//     telefono: pagoCompleto.telefono, 
-//     direccion: pagoCompleto.direccion, 
-//     concepto: pagoCompleto.concepto, 
-//     pagado: pagoCompleto.pagado,
-
-//     // --- CORRECCIÓN 1: VALOR (Asegurar nombre correcto y formato numérico) ---
-//     // Usar 'valor' (nombre SQL) y asegurar que el dato sea un número.
-//     valor: Number(pagoCompleto.valor || pagoCompleto.valorAnticipo) || 0,
-    
-//     // --- CORRECCIÓN 2: IDTIPO PAGO (CLAVE: Evitar enviar texto al campo ID) ---
-//     // Usar solo idTipoPago. Si no tiene valor, enviar 'null'. 
-//     // Se elimina la opción 'pagoCompleto.tipoPago' (la descripción en texto).
-//     idTipoPago: pagoCompleto.idTipoPago ? pagoCompleto.idTipoPago : null,
-    
-//     // --- CORRECCIÓN 3: REMISIONES (Asegurar solo una alternativa o null) ---
-//     // Si 'remisiones' es null, usar 'noComprobante'. Se quita la opción 'null' final si se asume string vacío.
-//     remisiones: pagoCompleto.remisiones || pagoCompleto.noComprobante || '', 
-// };
-
-//         console.log("Payload enviado a la API:", payload);
-//         // 3. Persistir el cambio en el servidor (API)
-//         await updatePago(id_pago, payload);
-
-//         // 4. Sincronización UI: Recargar toda la lista
-//         await loadAnticipos();
-
-//         // 5. Notificación de Éxito
-//         alert(`Pago ID ${id_pago} actualizado a ${nuevoEstado}`);
-//     } catch (error) {
-//         // ... (Manejo de errores)
-//     }
-// };
-  // // ==================================================
-  // // 🟢 FUNCIÓN DE TOGGLE DE ESTADO (Anticipos)
-  // // ==================================================
-
-  // const handleToggleAnticipoEstado = async (pagoCompleto) => {
-  //   const id_pago = pagoCompleto.id_pago || pagoCompleto.id;
-  //   const nuevoEstado =
-  //     pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
-
-  //   if (
-  //     !window.confirm(
-  //       `¿Está seguro de cambiar el estado del pago ID ${id_pago} a "${nuevoEstado}"?`
-  //     )
-  //   ) {
-  //     return;
-  //   }
-
-  //   try {
-  //     const payload = {
-  //       ...pagoCompleto,
-  //       estado: nuevoEstado,
-  //     };
-
-  //     console.log(payload);
-  //     // 3. Persistir el cambio en el servidor (API)
-  //     // Si esta llamada falla, el código salta inmediatamente al bloque catch.
-  //     console.log({ id_pago, payload });
-  //     await updatePago(id_pago, payload);
-
-  //     // 4. Sincronización UI: Recargar toda la lista desde el servidor.
-  //     await loadAnticipos();
-
-  //     // 5. Notificación de Éxito
-  //     alert(`Pago ID ${id_pago} actualizado a ${nuevoEstado}`);
-  //   } catch (error) {
-  //     // 6. Manejo de errores: Si updatePago o loadAnticipos fallan.
-  //     console.error("Error completo al cambiar el estado del anticipo:", error);
-
-  //     // Si el error contiene una respuesta del servidor, muéstrala.
-  //     const errorMessage =
-  //       error.response?.data?.message || error.message || "Error desconocido.";
-
-  //     alert(
-  //       `Error al actualizar el pago. Por favor, revise la conexión. Mensaje: ${errorMessage}`
-  //     );
-  //   }
-  // };
-
-
-// // ========================================================================
-// // 🟢 FUNCIÓN DE TOGGLE DE ESTADO (FINAL - EJECUTABLE)
-// // ========================================================================
-// const handleToggleAnticipoEstado = async (pagoCompleto) => {
-//     // El ID lo obtenemos del campo 'id' que viene en el objeto del frontend
-//     const id_pago = pagoCompleto.id; 
-//     const nuevoEstado = pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
-
-//     if (
-//         !window.confirm(
-//             `¿Está seguro de cambiar el estado del pago ID ${id_pago} a "${nuevoEstado}"?`
-//         )
-//     ) {
-//         return;
-//     }
-
-//     try {
-//         // 1. CONSTRUCCIÓN DEL PAYLOAD USANDO NOMBRES DE COLUMNA SQL
-//         const payload = {
-//             // --- CAMPOS DE COLUMNA SQL GARANTIZADOS ---
-//             estado: nuevoEstado, 
-//             fecha: pagoCompleto.fecha,
-//             idTercero: pagoCompleto.idTercero, 
-//             tipo: pagoCompleto.tipo || 'Anticipo', 
-//             cedula: pagoCompleto.cedula || '',
-//             telefono: pagoCompleto.telefono || '',
-//             direccion: pagoCompleto.direccion || null,
-//             concepto: pagoCompleto.concepto || '',
-//             pagado: pagoCompleto.pagado || 0,
-//             no_ingreso: pagoCompleto.no_ingreso || null,
-
-//             // --- MAPEO DE CAMPOS CONFLICTIVOS / CRÍTICOS ---
-            
-//             // 🚨 MAPEO 1: Valor (Frontend: valorAnticipo/valor -> SQL: valor)
-//             // Aseguramos formato numérico para la columna DECIMAL.
-//             valor: Number(pagoCompleto.valorAnticipo) || Number(pagoCompleto.valor) || 0, 
-
-//             // 🚨 MAPEO 2: Tipo de Pago (Frontend: tipoPago/idTipoPago -> SQL: idTipoPago)
-//             // Priorizamos el ID numérico/string del ID. NUNCA la descripción.
-//             idTipoPago: pagoCompleto.idTipoPago || null,
-            
-//             // 🚨 MAPEO 3: Comprobante (Frontend: noComprobante/remisiones -> SQL: remisiones)
-//             // Usamos remisiones (nombre SQL) y aceptamos la alternativa de frontend.
-//             remisiones: pagoCompleto.noComprobante || pagoCompleto.remisiones || '', 
-//         };
-        
-//         console.log("Payload FINAL y Mapeado enviado a la API:", payload);
-
-//         // 2. Persistir el cambio en el servidor (API)
-//         await updatePago(id_pago, payload);
-
-//         // 3. Sincronización UI
-//         await loadAnticipos();
-
-//         // 4. Notificación
-//         alert(`Pago ID ${id_pago} actualizado a ${nuevoEstado}`);
-//     } catch (error) {
-//         // Manejo de errores
-//         console.error("Error al cambiar el estado del anticipo:", error);
-//         const errorMessage = error.response?.data?.message || error.message || "Error desconocido.";
-//         alert(`Error al actualizar el pago. Mensaje: ${errorMessage}`);
-//     }
-// };
-// ========================================================================
-// 🟢 FUNCIÓN DE TOGGLE DE ESTADO (MÁXIMA ROBUSTEZ Y VALORES DE FÁBRICA)
-// ========================================================================
-const handleToggleAnticipoEstado = async (pagoCompleto) => {
-    // 1. DETERMINACIÓN DE ID y ESTADO
-    const id_pago = pagoCompleto.id; 
-    const nuevoEstado = pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
+    if (!id_pago) {
+      alert("Error: No se pudo determinar el ID del pago.");
+      return;
+    }
 
     if (
-        !window.confirm(
-            `¿Está seguro de cambiar el estado del pago ID ${id_pago} a "${nuevoEstado}"?`
-        )
-    ) {
-        return;
-    }
+      !window.confirm(`¿Está seguro de cambiar el estado a "${nuevoEstado}"?`)
+    )
+      return;
 
     try {
-        // 2. CONSTRUCCIÓN DEL PAYLOAD CON VALORES POR DEFECTO Y MAPEO COMPLETO
-        
-        const payload = {
-            // --- CAMPOS QUE ESTÁN EN EL OBJETO DE ORIGEN ---
-            fecha: pagoCompleto.fecha,
-            idTercero: pagoCompleto.idTercero, 
-            cedula: pagoCompleto.cedula || '',
-            telefono: pagoCompleto.telefono || '',
-            concepto: pagoCompleto.concepto || '',
-            
-            // --- CAMPOS NECESARIOS FALTANTES CON VALOR FALLBACK ---
-            tipo: pagoCompleto.tipo || 'Anticipo',         // Asumimos 'Anticipo'
-            direccion: pagoCompleto.direccion || '',       // Asumimos cadena vacía
-            no_ingreso: pagoCompleto.no_ingreso || '',     // Asumimos cadena vacía
-            pagado: pagoCompleto.pagado || 0,              // Asumimos 0
-            
-            // --- ESTADO (El único que se actualiza) ---
-            estado: nuevoEstado, 
+      const payload = {
+        id_pago: pagoCompleto.id || pagoCompleto.no_ingreso,
+        no_ingreso: String(pagoCompleto.noComprobante || ""),
+        fecha: pagoCompleto.fecha,
+        idTercero: pagoCompleto.idTercero,
+        tipo: pagoCompleto.tipo || "Anticipo",
+        valor:
+          Number(pagoCompleto.valorAnticipo) || Number(pagoCompleto.valor) || 0,
+        valorRemisiones:
+          Number(pagoCompleto.valorAnticipo) - Number(pagoCompleto.saldo),
+        cedula: pagoCompleto.cedula || "",
+        telefono: pagoCompleto.telefono || "",
+        direccion: pagoCompleto.direccion || "",
+        concepto: pagoCompleto.concepto || "",
+        idTipoPago: String(idTipoPago || ""),
+        pagado: pagoCompleto.pagado || 0,
+        remisiones: pagoCompleto.remisiones,
+        estado: nuevoEstado,
+      };
 
-            // 🚨 MAPEO 1: Valor (Frontend: valorAnticipo -> SQL: valor) - No Nulo
-            valor: Number(pagoCompleto.valorAnticipo) || Number(pagoCompleto.valor) || 0, 
-            
-            // 🚨 MAPEO 2: Tipo de Pago (Frontend: tipoPago -> SQL: idTipoPago)
-            // Ya que el objeto solo trae "Efectivo", asumimos que el ID es '1' 
-            // si no viene idTipoPago. Si este ID no es correcto, la API fallará.
-            idTipoPago: pagoCompleto.idTipoPago || '', // ⚠️ Usar '1' si no viene (Asumiendo que Efectivo es 1)
-            
-            // 🚨 MAPEO 3: Comprobante (Frontend: noComprobante -> SQL: remisiones)
-            remisiones: pagoCompleto.noComprobante || pagoCompleto.remisiones || '', 
-        };
-        
-        console.log("Payload FINAL (Robusto) enviado a la API:", payload);
-
-        // 3. Persistir el cambio en el servidor (API)
-        await updatePago(id_pago, payload);
-
-        // 4. Sincronización UI y Notificación
-        await loadAnticipos();
-        alert(`Pago ID ${id_pago} actualizado a ${nuevoEstado}`);
+      await updatePago(id_pago, payload);
+      const remisionesAsociadas = eval(payload.remisiones);
+      if (remisionesAsociadas && Array.isArray(remisionesAsociadas)) {
+        for (const remision of remisionesAsociadas) {
+          await cambiarEstadoMovimiento(remision, nuevoEstado);
+        }
+      }
+      await loadAnticipos();
+      setReloadAnticipos((x) => x + 1);
     } catch (error) {
-        // Manejo de errores
-        console.error("Error al cambiar el estado del anticipo:", error);
-        const errorMessage = error.response?.data?.message || error.message || "Error desconocido.";
-        alert(`Error al actualizar el pago. Mensaje: ${errorMessage}`);
+      alert(`Error al actualizar el pago: ${error.message}`);
     }
-};
-  //==========================================================================
-  //============================muestra el Login==============================
-  //==========================================================================
+  };
+
   if (!isAuthenticated) {
-    // Si no está autenticado, muestra el Login
     return <AuthForm onLogin={handleLoginSuccess} setUsuario={setUsuario} />;
   }
 
-  // ==================================================
-  // 🟢 RENDERIZADO PRINCIPAL (Sin cambios en el JSX)
-  // ==================================================
   return (
     <div className="flex h-screen bg-gray-100 font-sans text-gray-800 w-full overflow-hidden">
-      <Sidebar
+    <Sidebar
+  isOpen={isSidebarOpen}
+  setIsOpen={setIsSidebarOpen}
+  activeTab={activeTab}
+  setActiveTab={(tab) => {
+    // 1. Si el usuario hace clic en 'movimientos', cargamos los datos antes de cambiar
+    if (tab === "movimientos") {
+      loadMovimientos();
+      loadAnticipos(); // Opcional, por si quieres refrescar todo al tiempo
+    }
+
+    if (tab === "creditos") {
+      loadCreditos();
+    }
+
+    // 2. Mantener tus validaciones existentes
+    if (tab !== "movimientos") setFiltroRemisionesMasivo(null);
+    if (tab !== "anticipo") setAnticipoNoComprobanteToEdit(null);
+    if (tab !== "generador") {
+      setEditingMovement(null);
+      setIsEditing(false);
+    }
+
+    // 3. Cambiar la pestaña
+    setActiveTab(tab);
+  }}
+  onLogout={handleLogout}
+/>
+    
+    
+    
+      {/* <Sidebar
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={(tab) => {
+          if (tab !== "movimientos") setFiltroRemisionesMasivo(null);
+          if (tab !== "anticipo") setAnticipoNoComprobanteToEdit(null);
+          if (tab !== "generador") {
+            setEditingMovement(null);
+            setIsEditing(false);
+          }
+          setActiveTab(tab);
+        }}
         onLogout={handleLogout}
-      />
+      /> */}
 
       <main className="flex-1 overflow-y-auto relative w-full">
         <header className="bg-white shadow-sm p-4 flex items-center lg:hidden sticky top-0 z-40">
@@ -484,15 +416,16 @@ const handleToggleAnticipoEstado = async (pagoCompleto) => {
               paymentTypes={paymentTypes}
               onSave={addMovement}
               setMaterials={setMaterials}
-              editingMovement={editingMovement} // 🆕 Datos de cabecera para edición
-              editingItems={editingItems} // 🆕 Datos de ítems para edición
+              editingMovement={editingMovement}
+              editingItems={editingItems}
               onEditCancel={() => {
                 setEditingMovement(null);
                 setEditingItems([]);
+                setIsEditing(false);
                 setActiveTab("movimientos");
-              }} // 🆕 Limpiar estado
-              isEditing={isEditing} // 🆕 Indicador de edición
-              setIsEditing={setIsEditing} // 🆕 Setter para indicador de edición
+              }}
+              isEditing={isEditing}
+              setIsEditing={setIsEditing}
               usuario={usuario}
               setActiveTab={setActiveTab}
             />
@@ -507,6 +440,17 @@ const handleToggleAnticipoEstado = async (pagoCompleto) => {
               terceros={terceros}
               paymentTypes={paymentTypes}
               onSaveAnticipo={addAnticipo}
+              noComprobanteToEdit={anticipoNoComprobanteToEdit}
+              onLoadAnticipoByNoComprobante={loadAnticipoDataFunction}
+            />
+          )}
+
+          {activeTab === "creditos" && ( // 👈 7. Renderizado condicional
+            <CreditosTable
+              data={creditos}
+              onVerDetalle={(credito) => {
+                console.log("Ver detalle del crédito:", credito);
+              }}
             />
           )}
 
@@ -516,14 +460,31 @@ const handleToggleAnticipoEstado = async (pagoCompleto) => {
               onRefresh={loadMovimientos}
               onEdit={startEditing}
               paymentTypes={paymentTypes}
-              // 🆕 Pasar la función para iniciar la edición
+              filtroExterno={filtroRemisionesMasivo}
+              onClearFiltro={() => setFiltroRemisionesMasivo(null)}
             />
           )}
 
           {activeTab === "archivedAnticipos" && (
             <HistorialAnticipos
-              data={anticipos} // Ahora 'anticipos' debería estar lleno
+              key={reloadAnticipos}
+              data={anticipos}
               toggleAnticipoEstado={handleToggleAnticipoEstado}
+              onEditAnticipo={startEditingAnticipo}
+              onVerRemisionesAsociadas={handleVerRemisionesAsociadas}
+              onVerDetalleRemision={(numRemision) => {
+                const movimiento = movements.find(
+                  (m) => String(m.remision) === String(numRemision)
+                );
+                if (movimiento) {
+                  startEditing(movimiento);
+                } else {
+                  alert(
+                    "No se encontró el registro físico de la remisión REM-" +
+                      numRemision
+                  );
+                }
+              }}
             />
           )}
 
@@ -546,3 +507,853 @@ const handleToggleAnticipoEstado = async (pagoCompleto) => {
     </div>
   );
 }
+
+//===================================================================================================================================================================
+//===================================================================================================================================================================
+
+// // src/App.js
+
+// import React, { useState, useEffect, useCallback } from "react";
+// import { Menu } from "lucide-react";
+// import "./index.css";
+
+// // Componentes
+// import Sidebar from "./components/Sidebar.jsx";
+// import InvoiceGenerator from "./components/InvoiceGenerator.jsx";
+// import ConfigurationPanel from "./components/ConfigurationPanel.jsx";
+// import Terceros from "./components/terceros.jsx";
+// import PreciosEspeciales from "./components/PreciosEspeciales.jsx";
+// import AnticipoRegister from "./components/AnticipoRegister.jsx";
+// import HistorialAnticipos from "./components/HistorialAnticipos.jsx";
+// import AuthForm from "./components/AuthForm.jsx";
+// import MovimientosPage from "./components/MovimientosPage.jsx";
+// import CuadreCaja from "./components/CuadreCaja.jsx";
+
+// // Servicios
+// import { getToken, logoutUser } from "./assets/services/authService.js";
+
+// // 🔥 Importación de API centralizada:
+// import {
+//   fetchTiposPago,
+//   fetchTerceros,
+//   fetchMateriales,
+//   fetchPlacas,
+//   fetchMovimientos,
+//   createMovimiento,
+//   createMovimientoItem,
+//   fetchPreciosEspeciales,
+//   createPago,
+//   fetchPagos,
+//   updatePago,
+//   fetchLastRemisionNumber,
+//   fetchMovimientoItemsByRemision,
+//   fetchPagoUltimo,
+//   cambiarEstadoMovimiento,
+// } from "./assets/services/apiService.js";
+
+// export default function App() {
+//   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+//   const [activeTab, setActiveTab] = useState("inicio");
+//   const [isAuthenticated, setIsAuthenticated] = useState(false);
+//   const [usuario, setUsuario] = useState("");
+//   const [materials, setMaterials] = useState([]);
+//   const [paymentTypes, setPaymentTypes] = useState([]);
+//   const [movements, setMovements] = useState([]);
+//   const [anticipos, setAnticipos] = useState([]);
+//   const [terceros, setTerceros] = useState([]);
+//   const [reloadAnticipos, setReloadAnticipos] = useState(0);
+
+//   // 🆕 ESTADO PARA FILTRADO MASIVO DESDE ANTICIPOS
+//   const [filtroRemisionesMasivo, setFiltroRemisionesMasivo] = useState(null);
+
+//   // 🆕 ESTADOS PARA LA EDICIÓN DE MOVIMIENTOS
+//   const [editingMovement, setEditingMovement] = useState(null);
+//   const [editingItems, setEditingItems] = useState([]);
+//   const [isEditing, setIsEditing] = useState(false);
+
+//   // ESTADO PARA LA EDICIÓN DE ANTICIPOS
+//   const [anticipoNoComprobanteToEdit, setAnticipoNoComprobanteToEdit] =
+
+//     useState(null);
+
+//   // =======================================================
+//   // 🟢 FUNCIÓN CENTRALIZADA PARA CARGAR MOVIMIENTOS
+//   // =======================================================
+//   const loadMovimientos = async () => {
+//     try {
+//       const data = await fetchMovimientos();
+//       setMovements(data);
+//     } catch (error) {
+//       console.error("Fallo al cargar movimientos:", error);
+//     }
+//   };
+
+//   // =======================================================
+//   // 🟢 FUNCIÓN CENTRALIZADA PARA CARGAR ANTICIPOS (PAGOS)
+//   // =======================================================
+//   const loadAnticipos = async () => {
+//     try {
+//       const data = await fetchPagos();
+//       setAnticipos(data);
+//     } catch (error) {
+//       console.error("Fallo al cargar anticipos:", error);
+//     }
+//   };
+
+//   // =======================================================
+//   // 🟢 FUNCIÓN DE CARGA DE ANTICIPO POR ID (Para AnticipoRegister)
+//   // =======================================================
+//   const loadAnticipoDataFunction = useCallback(async (noComprobante) => {
+//     try {
+//       console.log("🔍 Buscando comprobante número:", noComprobante);
+//       const allAnticipos = await fetchPagos();
+
+//       const anticipo = allAnticipos.find((p) => {
+//         const idEnRegistro = String(p.no_ingreso || p.noComprobante || "");
+//         return idEnRegistro === String(noComprobante);
+//       });
+
+//       if (!anticipo) {
+//         console.error(`❌ Error: El comprobante ${noComprobante} no existe.`);
+//       } else {
+//         console.log("✅ Anticipo encontrado con éxito:", anticipo);
+//       }
+
+//       return anticipo;
+//     } catch (error) {
+//       console.error(
+//         "Error crítico al cargar anticipo por NoComprobante:",
+//         error
+//       );
+//       throw error;
+//     }
+//   }, []);
+
+//   // =======================================================
+//   // 🟢 FUNCIÓN PARA MANEJAR EL CLIC EN EL BOTÓN NARANJA DE REMISIONES
+//   // =======================================================
+//   const handleVerRemisionesAsociadas = (listaNumeros) => {
+//     setFiltroRemisionesMasivo(listaNumeros); // Guardamos el array [10, 11]
+//     setActiveTab("movimientos"); // Navegamos a la tabla de movimientos
+//   };
+
+//   // =======================================================
+//   // 🟢 FUNCIÓN PARA INICIAR LA EDICIÓN DE ANTICIPO
+//   // =======================================================
+//   const startEditingAnticipo = (noComprobante) => {
+//     setAnticipoNoComprobanteToEdit(noComprobante);
+//     setActiveTab("anticipo");
+//   };
+
+//   // =======================================================
+//   // 🟢 COMPORTAMIENTO: Persistencia de Sesión
+//   // =======================================================
+//   useEffect(() => {
+//     const token = getToken();
+//     setIsAuthenticated(!!token);
+//     const savedUser = localStorage.getItem("usuario");
+//     if (savedUser) setUsuario(savedUser);
+//   }, []);
+
+//   // ================================
+//   // CARGA GLOBAL DE CATÁLOGOS Y MOVIMIENTOS
+//   // ================================
+//   useEffect(() => {
+//     if (!isAuthenticated) return;
+
+//     (async () => {
+//       try {
+//         const tp = await fetchTiposPago();
+//         const ter = await fetchTerceros();
+//         const mat = await fetchMateriales();
+
+//         await loadMovimientos();
+//         await loadAnticipos();
+
+//         setPaymentTypes(tp);
+//         setTerceros(ter);
+//         setMaterials(mat);
+//       } catch (error) {
+//         console.error("Error al cargar datos iniciales:", error);
+//       }
+//     })();
+//   }, [isAuthenticated]);
+
+//   useEffect(() => {
+//     if (usuario) {
+//       localStorage.setItem("usuario", usuario);
+//     }
+//   }, [usuario]);
+
+//   const handleLoginSuccess = () => {
+//     setIsAuthenticated(true);
+//     setActiveTab("inicio");
+//   };
+
+//   const handleLogout = () => {
+//     logoutUser();
+//     setIsAuthenticated(false);
+//   };
+
+//   const startEditing = async (movementHeader) => {
+//     try {
+//       setEditingMovement(movementHeader);
+//       setIsEditing(true);
+//       const itemsData = await fetchMovimientoItemsByRemision(
+//         movementHeader.remision
+//       );
+//       setEditingItems(itemsData);
+//       setActiveTab("generador");
+//     } catch (error) {
+//       console.error("Error al cargar datos para edición:", error);
+//       alert("Hubo un error al cargar los detalles de la remisión.");
+//     }
+//   };
+
+//   const addMovement = async (headerData, itemsList) => {
+//     try {
+//       if (headerData.idTipoPago === 1 || headerData.idTipoPago === 2) {
+//         headerData.pagado = 1;
+//       }
+//       await createMovimiento(headerData);
+//       const remisionCreada = await fetchLastRemisionNumber();
+
+//       if (headerData.estadoDeCuenta) {
+//         await updatePago(
+//           headerData.estadoDeCuenta.no_ingreso,
+//           headerData.estadoDeCuenta
+//         );
+//       }
+
+//       for (const item of itemsList) {
+//         const payloadItem = {
+//           remision: remisionCreada.data[0].remision,
+//           idMaterial: parseInt(item.idMaterial),
+//           cantidad: Number(item.cantidad),
+//           precioUnitario: Number(item.precioUnitario),
+//           subtotal: Number(item.cantidad) * Number(item.precioUnitario),
+//           iva: 0,
+//           retencion: 0,
+//           total: Number(item.cantidad) * Number(item.precioUnitario),
+//         };
+//         await createMovimientoItem(payloadItem);
+//       }
+//       await loadMovimientos();
+//       return remisionCreada;
+//     } catch (error) {
+//       console.error("Error en la secuencia de guardado:", error);
+//       throw error;
+//     }
+//   };
+
+//   const addAnticipo = async (newAnticipo) => {
+//     await createPago(newAnticipo);
+//     const ultimoPago = await fetchPagoUltimo();
+//     await loadAnticipos();
+//     setAnticipoNoComprobanteToEdit(null);
+//     setActiveTab("archivedAnticipos");
+//     return ultimoPago;
+//   };
+
+//   const handleToggleAnticipoEstado = async (pagoCompleto) => {
+//     const id_pago = pagoCompleto.noComprobante;
+//     const nuevoEstado =
+//       pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
+//     const idTipoPago = paymentTypes.find(
+//       (tipo) => tipo.tipo_pago === pagoCompleto.tipoPago
+//     )?.idTipoPago;
+
+//     if (!id_pago) {
+//       alert("Error: No se pudo determinar el ID del pago.");
+//       return;
+//     }
+
+//     if (
+//       !window.confirm(`¿Está seguro de cambiar el estado a "${nuevoEstado}"?`)
+//     )
+//       return;
+
+//     try {
+//       console.log(pagoCompleto);
+//       const payload = {
+//         id_pago: pagoCompleto.id || pagoCompleto.no_ingreso,
+//         no_ingreso: String(pagoCompleto.noComprobante || ""),
+//         fecha: pagoCompleto.fecha,
+//         idTercero: pagoCompleto.idTercero,
+//         tipo: pagoCompleto.tipo || "Anticipo",
+//         valor:
+//           Number(pagoCompleto.valorAnticipo) || Number(pagoCompleto.valor) || 0,
+//         valorRemisiones:
+//           Number(pagoCompleto.valorAnticipo) - Number(pagoCompleto.saldo),
+//         cedula: pagoCompleto.cedula || "",
+//         telefono: pagoCompleto.telefono || "",
+//         direccion: pagoCompleto.direccion || "",
+//         concepto: pagoCompleto.concepto || "",
+//         idTipoPago: String(idTipoPago || ""),
+//         pagado: pagoCompleto.pagado || 0,
+//         remisiones: pagoCompleto.remisiones,
+//         estado: nuevoEstado,
+//       };
+
+//       await updatePago(id_pago, payload);
+//       const remisionesAsociadas = eval(payload.remisiones);
+//       remisionesAsociadas.forEach(async (remision) => {
+//         await cambiarEstadoMovimiento(remision, nuevoEstado);
+//       });
+//       await loadAnticipos();
+//       setReloadAnticipos((x) => x + 1);
+//     } catch (error) {
+//       alert(`Error al actualizar el pago: ${error.message}`);
+//     }
+//   };
+
+//   if (!isAuthenticated) {
+//     return <AuthForm onLogin={handleLoginSuccess} setUsuario={setUsuario} />;
+//   }
+
+//   return (
+//     <div className="flex h-screen bg-gray-100 font-sans text-gray-800 w-full overflow-hidden">
+//       <Sidebar
+//         isOpen={isSidebarOpen}
+//         setIsOpen={setIsSidebarOpen}
+//         activeTab={activeTab}
+//         setActiveTab={(tab) => {
+//           if (tab !== "movimientos") setFiltroRemisionesMasivo(null);
+//           if (tab !== "anticipo") setAnticipoNoComprobanteToEdit(null);
+//           if (tab !== "generador") {
+//             setEditingMovement(null);
+//             setIsEditing(false);
+//           }
+//           setActiveTab(tab);
+//         }}
+//         onLogout={handleLogout}
+//       />
+
+//       <main className="flex-1 overflow-y-auto relative w-full">
+//         <header className="bg-white shadow-sm p-4 flex items-center lg:hidden sticky top-0 z-40">
+//           <button
+//             onClick={() => setIsSidebarOpen(true)}
+//             className="text-gray-700 mr-4"
+//           >
+//             <Menu size={24} />
+//           </button>
+//           <h1 className="text-lg font-semibold text-emerald-700">
+//             Sistema Contable
+//           </h1>
+//         </header>
+
+//         <div className="p-6">
+//           {activeTab === "generador" && (
+//             <InvoiceGenerator
+//               materials={materials}
+//               paymentTypes={paymentTypes}
+//               onSave={addMovement}
+//               setMaterials={setMaterials}
+//               editingMovement={editingMovement}
+//               editingItems={editingItems}
+//               onEditCancel={() => {
+//                 setEditingMovement(null);
+//                 setEditingItems([]);
+//                 setIsEditing(false);
+//                 setActiveTab("movimientos");
+//               }}
+//               isEditing={isEditing}
+//               setIsEditing={setIsEditing}
+//               usuario={usuario}
+//               setActiveTab={setActiveTab}
+//             />
+//           )}
+
+//           {activeTab === "cuadreCaja" && (
+//             <CuadreCaja movements={movements} anticipos={anticipos} />
+//           )}
+
+//           {activeTab === "anticipo" && (
+//             <AnticipoRegister
+//               terceros={terceros}
+//               paymentTypes={paymentTypes}
+//               onSaveAnticipo={addAnticipo}
+//               noComprobanteToEdit={anticipoNoComprobanteToEdit}
+//               onLoadAnticipoByNoComprobante={loadAnticipoDataFunction}
+//             />
+//           )}
+
+//           {activeTab === "movimientos" && (
+//             <MovimientosPage
+//               data={movements}
+//               onRefresh={loadMovimientos}
+//               onEdit={startEditing}
+//               paymentTypes={paymentTypes}
+//               filtroExterno={filtroRemisionesMasivo}
+//               onClearFiltro={() => setFiltroRemisionesMasivo(null)}
+//             />
+//           )}
+
+//           {activeTab === "archivedAnticipos" && (
+//             <HistorialAnticipos
+//               key={reloadAnticipos}
+//               data={anticipos}
+//               toggleAnticipoEstado={handleToggleAnticipoEstado}
+//               onEditAnticipo={startEditingAnticipo}
+//               onVerRemisionesAsociadas={handleVerRemisionesAsociadas}
+//               onVerDetalleRemision={(numRemision) => {
+//                 const movimiento = movements.find(
+//                   (m) => String(m.remision) === String(numRemision)
+//                 );
+//                 if (movimiento) {
+//                   startEditing(movimiento);
+//                 } else {
+//                   alert(
+//                     "No se encontró el registro físico de la remisión REM-" +
+//                       numRemision
+//                   );
+//                 }
+//               }}
+//             />
+//           )}
+
+//           {activeTab === "terceros" && (
+//             <Terceros data={terceros} setData={setTerceros} />
+//           )}
+
+//           {activeTab === "config" && (
+//             <ConfigurationPanel
+//               materials={materials}
+//               setMaterials={setMaterials}
+//               paymentTypes={paymentTypes}
+//               setPaymentTypes={setPaymentTypes}
+//             />
+//           )}
+
+//           {activeTab === "PreciosEspeciales" && <PreciosEspeciales />}
+//         </div>
+//       </main>
+//     </div>
+//   );
+// }
+//=========================================================================================================
+//=========================================================================================================
+
+// src/App.js
+
+// import React, { useState, useEffect, useCallback } from "react";
+// import { Menu } from "lucide-react";
+// import "./index.css";
+
+// // Componentes
+// import Sidebar from "./components/Sidebar.jsx";
+// import InvoiceGenerator from "./components/InvoiceGenerator.jsx";
+// import ConfigurationPanel from "./components/ConfigurationPanel.jsx";
+// import Terceros from "./components/terceros.jsx";
+// import PreciosEspeciales from "./components/PreciosEspeciales.jsx";
+// import AnticipoRegister from "./components/AnticipoRegister.jsx";
+// import HistorialAnticipos from "./components/HistorialAnticipos.jsx";
+// import AuthForm from "./components/AuthForm.jsx";
+// import MovimientosPage from "./components/MovimientosPage.jsx";
+// import CuadreCaja from "./components/CuadreCaja.jsx";
+
+// // Servicios
+// import { getToken, logoutUser } from "./assets/services/authService.js";
+
+// // 🔥 Importación de API centralizada:
+// import {
+//   fetchTiposPago,
+//   fetchTerceros,
+//   fetchMateriales,
+//   fetchPlacas,
+//   fetchMovimientos,
+//   createMovimiento,
+//   createMovimientoItem,
+//   fetchPreciosEspeciales,
+//   createPago,
+//   fetchPagos,
+//   updatePago,
+//   fetchLastRemisionNumber,
+//   fetchMovimientoItemsByRemision,
+//   fetchPagoUltimo,
+// } from "./assets/services/apiService.js";
+
+// export default function App() {
+//   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+//   const [activeTab, setActiveTab] = useState("inicio");
+//   const [isAuthenticated, setIsAuthenticated] = useState(false);
+//   const [usuario, setUsuario] = useState("");
+//   const [materials, setMaterials] = useState([]);
+//   const [paymentTypes, setPaymentTypes] = useState([]);
+//   const [movements, setMovements] = useState([]);
+//   const [anticipos, setAnticipos] = useState([]);
+//   const [terceros, setTerceros] = useState([]);
+//   const [reloadAnticipos, setReloadAnticipos] = useState(0);
+
+//   // 🆕 ESTADO PARA FILTRADO MASIVO DESDE ANTICIPOS
+//   const [filtroRemisionesMasivo, setFiltroRemisionesMasivo] = useState(null);
+
+//   // 🆕 ESTADOS PARA LA EDICIÓN DE MOVIMIENTOS
+//   const [editingMovement, setEditingMovement] = useState(null);
+//   const [editingItems, setEditingItems] = useState([]);
+//   const [isEditing, setIsEditing] = useState(false);
+
+//   // ESTADO PARA LA EDICIÓN DE ANTICIPOS
+//   const [anticipoNoComprobanteToEdit, setAnticipoNoComprobanteToEdit] =
+//     useState(null);
+
+//   // =======================================================
+//   // 🟢 FUNCIÓN CENTRALIZADA PARA CARGAR MOVIMIENTOS
+//   // =======================================================
+//   const loadMovimientos = async () => {
+//     try {
+//       const data = await fetchMovimientos();
+//       setMovements(data);
+//     } catch (error) {
+//       console.error("Fallo al cargar movimientos:", error);
+//     }
+//   };
+
+//   // =======================================================
+//   // 🟢 FUNCIÓN CENTRALIZADA PARA CARGAR ANTICIPOS (PAGOS)
+//   // =======================================================
+//   const loadAnticipos = async () => {
+//     try {
+//       const data = await fetchPagos();
+//       setAnticipos(data);
+//     } catch (error) {
+//       console.error("Fallo al cargar anticipos:", error);
+//     }
+//   };
+
+//   // =======================================================
+//   // 🟢 FUNCIÓN DE CARGA DE ANTICIPO POR ID (Para AnticipoRegister)
+//   // =======================================================
+//   const loadAnticipoDataFunction = useCallback(async (noComprobante) => {
+//     try {
+//       console.log("🔍 Buscando comprobante número:", noComprobante);
+//       const allAnticipos = await fetchPagos();
+
+//       const anticipo = allAnticipos.find((p) => {
+//         const idEnRegistro = String(p.no_ingreso || p.noComprobante || "");
+//         return idEnRegistro === String(noComprobante);
+//       });
+
+//       if (!anticipo) {
+//         console.error(`❌ Error: El comprobante ${noComprobante} no existe.`);
+//       } else {
+//         console.log("✅ Anticipo encontrado con éxito:", anticipo);
+//       }
+
+//       return anticipo;
+//     } catch (error) {
+//       console.error(
+//         "Error crítico al cargar anticipo por NoComprobante:",
+//         error
+//       );
+//       throw error;
+//     }
+//   }, []);
+
+//   // =======================================================
+//   // 🟢 FUNCIÓN PARA MANEJAR EL CLIC EN EL BOTÓN NARANJA DE REMISIONES
+//   // =======================================================
+//   const handleVerRemisionesAsociadas = (listaNumeros) => {
+//     setFiltroRemisionesMasivo(listaNumeros); // Guardamos el array [10, 11]
+//     setActiveTab("movimientos"); // Navegamos a la tabla de movimientos
+//   };
+
+//   // =======================================================
+//   // 🟢 FUNCIÓN PARA INICIAR LA EDICIÓN DE ANTICIPO
+//   // =======================================================
+//   const startEditingAnticipo = (noComprobante) => {
+//     setAnticipoNoComprobanteToEdit(noComprobante);
+//     setActiveTab("anticipo");
+//   };
+
+//   // =======================================================
+//   // 🟢 COMPORTAMIENTO: Persistencia de Sesión
+//   // =======================================================
+//   useEffect(() => {
+//     const token = getToken();
+//     setIsAuthenticated(!!token);
+//     const savedUser = localStorage.getItem("usuario");
+//     if (savedUser) setUsuario(savedUser);
+//   }, []);
+
+//   // ================================
+//   // CARGA GLOBAL DE CATÁLOGOS Y MOVIMIENTOS
+//   // ================================
+//   useEffect(() => {
+//     if (!isAuthenticated) return;
+
+//     (async () => {
+//       try {
+//         const tp = await fetchTiposPago();
+//         const ter = await fetchTerceros();
+//         const mat = await fetchMateriales();
+
+//         await loadMovimientos();
+//         await loadAnticipos();
+
+//         setPaymentTypes(tp);
+//         setTerceros(ter);
+//         setMaterials(mat);
+//       } catch (error) {
+//         console.error("Error al cargar datos iniciales:", error);
+//       }
+//     })();
+//   }, [isAuthenticated]);
+
+//   useEffect(() => {
+//     if (usuario) {
+//       localStorage.setItem("usuario", usuario);
+//     }
+//   }, [usuario]);
+
+//   const handleLoginSuccess = () => {
+//     setIsAuthenticated(true);
+//     setActiveTab("inicio");
+//   };
+
+//   const handleLogout = () => {
+//     logoutUser();
+//     setIsAuthenticated(false);
+//   };
+
+//   const startEditing = async (movementHeader) => {
+//     try {
+//       setEditingMovement(movementHeader);
+//       setIsEditing(true);
+//       const itemsData = await fetchMovimientoItemsByRemision(
+//         movementHeader.remision
+//       );
+//       setEditingItems(itemsData);
+//       setActiveTab("generador");
+//     } catch (error) {
+//       console.error("Error al cargar datos para edición:", error);
+//       alert("Hubo un error al cargar los detalles de la remisión.");
+//     }
+//   };
+
+//   const addMovement = async (headerData, itemsList) => {
+//     try {
+//       if (headerData.idTipoPago === 1 || headerData.idTipoPago === 2) {
+//         headerData.pagado = 1;
+//       }
+//       await createMovimiento(headerData);
+//       const remisionCreada = await fetchLastRemisionNumber();
+
+//       if (headerData.estadoDeCuenta) {
+//         await updatePago(
+//           headerData.estadoDeCuenta.no_ingreso,
+//           headerData.estadoDeCuenta
+//         );
+//       }
+
+//       for (const item of itemsList) {
+//         const payloadItem = {
+//           remision: remisionCreada.data[0].remision,
+//           idMaterial: parseInt(item.idMaterial),
+//           cantidad: Number(item.cantidad),
+//           precioUnitario: Number(item.precioUnitario),
+//           subtotal: Number(item.cantidad) * Number(item.precioUnitario),
+//           iva: 0,
+//           retencion: 0,
+//           total: Number(item.cantidad) * Number(item.precioUnitario),
+//         };
+//         await createMovimientoItem(payloadItem);
+//       }
+//       await loadMovimientos();
+//       return remisionCreada;
+//     } catch (error) {
+//       console.error("Error en la secuencia de guardado:", error);
+//       throw error;
+//     }
+//   };
+
+//   const addAnticipo = async (newAnticipo) => {
+//     await createPago(newAnticipo);
+//     const ultimoPago = await fetchPagoUltimo();
+//     await loadAnticipos();
+//     setAnticipoNoComprobanteToEdit(null);
+//     setActiveTab("archivedAnticipos");
+//     return ultimoPago;
+//   };
+
+//   const handleToggleAnticipoEstado = async (pagoCompleto) => {
+//     const id_pago = pagoCompleto.noComprobante;
+//     const nuevoEstado =
+//       pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
+//     const idTipoPago = paymentTypes.find(
+//       (tipo) => tipo.tipo_pago === pagoCompleto.tipoPago
+//     )?.idTipoPago;
+
+//     if (!id_pago) {
+//       alert("Error: No se pudo determinar el ID del pago.");
+//       return;
+//     }
+
+//     if (
+//       !window.confirm(`¿Está seguro de cambiar el estado a "${nuevoEstado}"?`)
+//     )
+//       return;
+
+//     try {
+//       const payload = {
+//         id_pago: pagoCompleto.id || pagoCompleto.no_ingreso,
+//         no_ingreso: String(pagoCompleto.noComprobante || ""),
+//         fecha: pagoCompleto.fecha,
+//         idTercero: pagoCompleto.idTercero,
+//         tipo: pagoCompleto.tipo || "Anticipo",
+//         valor:
+//           Number(pagoCompleto.valorAnticipo) || Number(pagoCompleto.valor) || 0,
+//         cedula: pagoCompleto.cedula || "",
+//         telefono: pagoCompleto.telefono || "",
+//         direccion: pagoCompleto.direccion || "",
+//         concepto: pagoCompleto.concepto || "",
+//         idTipoPago: String(idTipoPago || ""),
+//         pagado: pagoCompleto.pagado || 0,
+//         remisiones: pagoCompleto.remisiones,
+//         estado: nuevoEstado,
+//       };
+
+//       await updatePago(id_pago, payload);
+//       await loadAnticipos();
+//       setReloadAnticipos((x) => x + 1);
+//     } catch (error) {
+//       alert(`Error al actualizar el pago: ${error.message}`);
+//     }
+//   };
+
+//   if (!isAuthenticated) {
+//     return <AuthForm onLogin={handleLoginSuccess} setUsuario={setUsuario} />;
+//   }
+
+//   return (
+//     <div className="flex h-screen bg-gray-100 font-sans text-gray-800 w-full overflow-hidden">
+//       <Sidebar
+//         isOpen={isSidebarOpen}
+//         setIsOpen={setIsSidebarOpen}
+//         activeTab={activeTab}
+//         setActiveTab={(tab) => {
+//           // 🆕 Limpiamos el filtro de remisiones si salimos de la pestaña movimientos
+//           if (tab !== "movimientos") setFiltroRemisionesMasivo(null);
+//           if (tab !== "anticipo") setAnticipoNoComprobanteToEdit(null);
+//           if (tab !== "generador") {
+//             setEditingMovement(null);
+//             setIsEditing(false);
+//           }
+//           setActiveTab(tab);
+//         }}
+//         onLogout={handleLogout}
+//       />
+
+//       <main className="flex-1 overflow-y-auto relative w-full">
+//         <header className="bg-white shadow-sm p-4 flex items-center lg:hidden sticky top-0 z-40">
+//           <button
+//             onClick={() => setIsSidebarOpen(true)}
+//             className="text-gray-700 mr-4"
+//           >
+//             <Menu size={24} />
+//           </button>
+//           <h1 className="text-lg font-semibold text-emerald-700">
+//             Sistema Contable
+//           </h1>
+//         </header>
+
+//         <div className="p-6">
+//           {activeTab === "generador" && (
+//             <InvoiceGenerator
+//               materials={materials}
+//               paymentTypes={paymentTypes}
+//               onSave={addMovement}
+//               setMaterials={setMaterials}
+//               editingMovement={editingMovement}
+//               editingItems={editingItems}
+//               onEditCancel={() => {
+//                 setEditingMovement(null);
+//                 setEditingItems([]);
+//                 setIsEditing(false);
+//                 setActiveTab("movimientos");
+//               }}
+//               isEditing={isEditing}
+//               setIsEditing={setIsEditing}
+//               usuario={usuario}
+//               setActiveTab={setActiveTab}
+//             />
+//           )}
+
+//           {activeTab === "cuadreCaja" && (
+//             <CuadreCaja movements={movements} anticipos={anticipos} />
+//           )}
+
+//           {activeTab === "anticipo" && (
+//             <AnticipoRegister
+//               terceros={terceros}
+//               paymentTypes={paymentTypes}
+//               onSaveAnticipo={addAnticipo}
+//               noComprobanteToEdit={anticipoNoComprobanteToEdit}
+//               onLoadAnticipoByNoComprobante={loadAnticipoDataFunction}
+//             />
+//           )}
+
+//           {activeTab === "movimientos" && (
+//             <MovimientosPage
+//               data={movements}
+//               onRefresh={loadMovimientos}
+//               onEdit={startEditing}
+//               paymentTypes={paymentTypes}
+//               filtroExterno={filtroRemisionesMasivo} // 🆕 Pasamos el filtro
+//               onClearFiltro={() => setFiltroRemisionesMasivo(null)} // 🆕 Para resetearlo
+//             />
+//           )}
+
+// {activeTab === "archivedAnticipos" && (
+//   <HistorialAnticipos
+//     key={reloadAnticipos}
+//     data={anticipos}
+//     toggleAnticipoEstado={handleToggleAnticipoEstado}
+//     onEditAnticipo={startEditingAnticipo}
+
+//     // 1. Esta función abre la tabla de movimientos filtrada (Botón Naranja)
+//     onVerRemisionesAsociadas={handleVerRemisionesAsociadas}
+
+//     // 2. Esta función lleva directamente al Generador (Flecha dentro del Modal)
+//     onVerDetalleRemision={(numRemision) => {
+//       // Buscamos el objeto del movimiento que coincida con el número de remisión
+//       const movimiento = movements.find(m => String(m.remision) === String(numRemision));
+
+//       if (movimiento) {
+//         // startEditing ya contiene: setEditingMovement, setEditingItems y setActiveTab("generador")
+//         startEditing(movimiento);
+//       } else {
+//         alert("No se encontró el registro físico de la remisión REM-" + numRemision);
+//       }
+//     }}
+//   />
+// )}
+//           {/* {activeTab === "archivedAnticipos" && (
+//             <HistorialAnticipos
+//               key={reloadAnticipos}
+//               toggleAnticipoEstado={handleToggleAnticipoEstado}
+//               onEditAnticipo={startEditingAnticipo}
+//               onVerRemisionesAsociadas={handleVerRemisionesAsociadas} // 🆕 Nueva prop para el botón naranja
+//               data={anticipos}
+//             />
+//           )} */}
+
+//           {activeTab === "terceros" && (
+//             <Terceros data={terceros} setData={setTerceros} />
+//           )}
+
+//           {activeTab === "config" && (
+//             <ConfigurationPanel
+//               materials={materials}
+//               setMaterials={setMaterials}
+//               paymentTypes={paymentTypes}
+//               setPaymentTypes={setPaymentTypes}
+//             />
+//           )}
+
+//           {activeTab === "PreciosEspeciales" && <PreciosEspeciales />}
+//         </div>
+//       </main>
+//     </div>
+//   );
+// }
