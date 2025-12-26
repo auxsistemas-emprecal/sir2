@@ -40,7 +40,7 @@
 
 // ------------------------ ARCHIVO DE AUTENTICACIÓN (authService.js) ------------------------
 
-const BASE_URL = "http://192.168.150.8:8000";
+const BASE_URL = "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev";
 const LOGIN_URL = `${BASE_URL}/auth/token`;
 
 /**

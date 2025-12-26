@@ -18,7 +18,8 @@ import {
   fetchPagosPorNombre,
   fetchPagosPorNoIngreso,
   updatePago,
-  fetchCreditosPorNombre
+  updateCredito,
+  fetchCreditosPorNombre,
 } from "../assets/services/apiService";
 
 // --- Nuevo Componente: Modal de Confirmación ---
@@ -317,7 +318,7 @@ export default function InvoiceGenerator({
       valorRemision: calculos.total,
       remisiones: selectedPago ? selectedPago.remisiones : "[]",
       valorRemisiones: selectedPago
-        ? selectedPago.valorRemisiones - editingMovement.total
+        ? selectedPago.valorRemisiones - (editingMovement?.total || 0)
         : 0,
       saldo: selectedPago ? selectedPago.saldo + editingMovement.total : 0,
       pagoOriginal: selectedPago,
@@ -609,7 +610,10 @@ export default function InvoiceGenerator({
         const creditoEnDB = respuestaCredito[0];
         creditoActualizarPayload = {
           ...creditoEnDB,
-          valorRemisiones: creditoEnDB.valorRemisiones - formData.total,
+          valorRemisiones:
+            creditoEnDB.valorRemisiones -
+            editingMovement.total +
+            calculos.total,
         };
       }
 
@@ -678,6 +682,7 @@ export default function InvoiceGenerator({
           );
         }
         if (creditoActualizarPayload) {
+          console.log("Créditos: ", creditoActualizarPayload);
           await updateCredito(
             creditoActualizarPayload.idCredito,
             creditoActualizarPayload
@@ -700,123 +705,6 @@ export default function InvoiceGenerator({
       setIsLoading(false); // [NUEVO] IMPORTANTE: Siempre apaga el cargando, falle o funcione.
     }
   };
-
-  // const handleConfirmSave = async () => {
-  //   setShowModal(false);
-
-  //   const totalCubicaje = lineItems.reduce((acc, item) => {
-  //     return acc + (Number(item.cantidad) || 0);
-  //   }, 0);
-
-  //   // 1. Crear fecha combinada localmente
-  //   const fechaLocal = new Date(`${formData.fecha}T${formData.horaLlegada}:00`);
-
-  //   // 2. Restar el offset de la zona horaria para neutralizar la conversión a UTC
-  //   const fechaISO = new Date(
-  //     fechaLocal.getTime() - fechaLocal.getTimezoneOffset() * 60000
-  //   ).toISOString();
-
-  //   let remisionLastNumber = await fetchLastRemisionNumber();
-  //   remisionLastNumber = (remisionLastNumber.data[0]?.remision || 0) + 1;
-
-  //   let estadoDeCuentaPayload = null;
-  //   if (formData.tipoPago === "Pago por anticipado") {
-  //     estadoDeCuentaPayload = await fetchPagosPorNoIngreso(
-  //       estadoDeCuenta.no_ingreso
-  //     );
-  //     estadoDeCuentaPayload = estadoDeCuentaPayload[0];
-  //     let remisionesArray = eval(estadoDeCuentaPayload.remisiones);
-  //     if (!isEditing) remisionesArray.push(remisionLastNumber);
-  //     estadoDeCuentaPayload = {
-  //       ...estadoDeCuentaPayload,
-  //       remisiones: `[${remisionesArray}]`,
-  //       valorRemisiones:
-  //         estadoDeCuentaPayload.valorRemisiones +
-  //         estadoDeCuenta.valorRemision -
-  //         (editingMovement?.total || 0),
-  //     };
-  //     delete estadoDeCuentaPayload.saldo;
-  //   }
-  //   console.log("Estados de cuenta payload:", estadoDeCuentaPayload);
-
-  //   const payloadHeader = {
-  //     fecha: fechaISO,
-  //     remision: remisionLastNumber,
-  //     idTercero: formData.idTercero ? parseInt(formData.idTercero) : 0,
-  //     idTipoPago: formData.idTipoPago,
-  //     placa: formData.placa || "",
-  //     direccion: formData.direccion || "",
-  //     observacion: formData.observacion || "",
-  //     conductor: formData.conductor || "",
-  //     cedula: formData.cedula || "",
-  //     telefono: formData.telefono || "",
-  //     no_ingreso: "",
-  //     estado: "VIGENTE",
-  //     pagado: 0,
-  //     factura: 0,
-  //     cubicaje: totalCubicaje,
-  //     subtotal: Number(calculos.subtotal) || 0,
-  //     iva: Number(calculos.iva) || 0,
-  //     retencion: Number(calculos.retencion) || 0,
-  //     total: Number(calculos.total) || 0,
-  //     incluir_iva: formData.incluirIva ? 1 : 0,
-  //     incluir_ret: formData.incluirRet ? 1 : 0,
-  //     tercero: formData.tercero,
-  //     horaLlegada: formData.horaLlegada,
-  //     telefono: formData.telefono,
-  //     tipoPago: formData.tipoPago,
-  //     estadoDeCuenta: estadoDeCuentaPayload ?? null,
-  //   };
-
-  //   console.log("Payload: ", payloadHeader);
-
-  //   try {
-  //     if (isEditing) {
-  //       setIsEditing(false);
-  //       let datosActualizar = {
-  //         ...formData,
-  //         fecha: fechaISO,
-  //         incluir_iva: +formData.incluirIva,
-  //         incluir_ret: +formData.incluirRet,
-  //         factura: 0,
-  //         observacion: formData.observacion,
-  //         subtotal: Number(calculos.subtotal) || 0,
-  //         iva: Number(calculos.iva) || 0,
-  //         retencion: Number(calculos.retencion) || 0,
-  //         total: Number(calculos.total) || 0,
-  //       };
-
-  //       const usuario = localStorage.getItem("usuario") || "Desconocido";
-
-  //       let cambios = compararDatos(editingMovement, datosActualizar, usuario);
-  //       lineItems.forEach((item, idx) => {
-  //         cambios += compararDatos(editingItems.data[idx], item, usuario);
-  //         updateMovimientoItems(editingMovement.remision, item);
-  //       });
-  //       datosActualizar = {
-  //         ...datosActualizar,
-  //         observacion: datosActualizar.observacion + cambios,
-  //       };
-  //       updateMovimiento(editingMovement.remision, datosActualizar);
-  //       updatePago(estadoDeCuentaPayload.no_ingreso, estadoDeCuentaPayload);
-  //     } else {
-  //       const responseSaved = await onSave(payloadHeader, lineItems);
-  //       setFormData({
-  //         ...payloadHeader,
-  //         remision: responseSaved.data[0].remision,
-  //       });
-  //     }
-
-  //     // --- LÓGICA DE ÉXITO ---
-  //     setLastSavedRecord({ ...payloadHeader, materiales: lineItems });
-  //   } catch (error) {
-  //     console.error("Fallo al guardar:", error);
-  //     // Muestra el mensaje de error que propagó App.jsx
-  //     alert(`❌ Error al guardar: ${error.message}`);
-  //   }
-  // };
-  //====================================================================================================================
-  //====================================================================================================================
 
   const handleNewRecord = () => {
     const currentParts = getColombiaDateParts(); // Usar la función auxiliar

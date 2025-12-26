@@ -48,7 +48,7 @@ export default function HistorialAnticipos({
                     const tipoEncontrado = tiposPagoData.find(
                         (tp) => String(tp.idTipoPago) === String(pago.idTipoPago)
                     ); 
-                  
+                
                     return {
                         estado: pago.estado || "VIGENTE",
                         id: pago.id_pago || pago.id, 
@@ -60,7 +60,7 @@ export default function HistorialAnticipos({
                         direccion: pago.direccion || terceroEncontrado?.direccion || "N/A",
                         concepto: pago.concepto || "Anticipo",
                         valorAnticipo: pago.valor || pago.valorAnticipo || 0,
-                        // Mantenemos las remisiones como string o array para el hijo
+                        pagado: pago.pagado || 0,
                         remisiones: pago.remisiones || "[]",
                         saldo: pago.saldo,
                         tipoPago: tipoEncontrado ? tipoEncontrado.tipo_pago : "N/A",

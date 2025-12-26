@@ -110,24 +110,6 @@ useEffect(() => {
     });
   };
 
-  // const agregarGasto = (e) => {
-  //   e.preventDefault();
-
-  //   if (!formGasto.descripcion || !formGasto.valor) return;
-
-  //   setGastos([
-  //     ...gastos,
-  //     {
-  //       id: Date.now(),
-  //       descripcion: formGasto.descripcion,
-  //       valor: Number(formGasto.valor),
-  //       observacion: formGasto.observacion,
-  //       fecha: hoy,
-  //     },
-  //   ]);
-
-  //   setFormGasto({ descripcion: "", valor: "", observacion: "" });
-  // };
   const agregarGasto = async (e) => {
   e.preventDefault();
 
@@ -324,37 +306,6 @@ const obtenerTipoPago = (movimiento) => {
     alert("❌ Error al guardar el cuadre: " + error.message);
   }
 };
-//   const handleFinalizarCuadre = async () => {
-//   // 1. Validamos que no intenten guardar un cuadre en $0 por error
-//   const ventasTotalesNetas = resumenFinal.ingresosTotales; // Suma de todos los pagos
-//   const efectivoNeto = resumenFinal.totalEfectivoNeto;    // Efectivo + Recibos - Gastos
-//   if (totalVentas === 0 && totalGastos === 0) {
-//     if (!window.confirm("El total de ventas y gastos es $0. ¿Deseas guardar el cuadre de todas formas?")) {
-//       return;
-//     }
-//   }
-
-//   // 2. Preparamos el objeto con la estructura que pide tu endpoint
-// const datosParaGuardar = {
-//     fecha: fechaConsulta,
-//     gastos_diarios: totalGastosHoy, // Nombre corregido
-//     efectivo_ventas: totalesPorTipo.Efectivo || 0,
-//     recibos_caja: Number(recibosCaja) || 0,
-//     credito: totalesPorTipo.Crédito || 0, // Nota: Revisa si tu objeto usa 'Crédito' con tilde
-//     transferencia: totalesPorTipo.Transferencia || 0,
-//     total_efectivo_caja: efectivoNeto,
-//     total_neto_dia: ventasTotalesNetas
-//   };
-
-//   try {
-//     // Llamamos a la función que pegaste en apiService.js
-//     await saveCuadreCaja(datosParaGuardar); 
-//     alert("✅ El resumen del cuadre se ha guardado correctamente.");
-//   } catch (error) {
-//     console.error("Error al guardar:", error);
-//     alert("❌ Error al guardar el cuadre: " + error.message);
-//   }
-// };
 
   // ===============================
   // RENDER
@@ -405,7 +356,7 @@ const obtenerTipoPago = (movimiento) => {
 </style>
       {/* <h2 className="text-2xl font-bold mb-6">💵 Cuadre de Caja</h2> */}
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">💵 Cuadre de Caja</h2>
+        <h2 className="no-print text-2xl font-bold">💵 Cuadre de Caja</h2>
         {/* Tu botón de imprimir... */}
         <button 
           onClick={() => window.print()}
@@ -418,7 +369,7 @@ const obtenerTipoPago = (movimiento) => {
       {/* ===================== GASTOS ===================== */}
       <form
         onSubmit={agregarGasto}
-        className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4"
+        className="no-print grid grid-cols-1 md:grid-cols-3 gap-3 mb-4"
       >
         <input
           name="descripcion"
@@ -481,7 +432,7 @@ const obtenerTipoPago = (movimiento) => {
                     title="Eliminar gasto"
                   >
                     {/* Icono simple de papelera */}
-                    🗑️
+                    ✘
                   </button>
                 </td>
               </tr>
@@ -704,7 +655,7 @@ const obtenerTipoPago = (movimiento) => {
                   <td className="border p-2">
                     {m.fecha.split("T")[0]}
                   </td>
-                  <td className="border p-2">{m.no_ingreso}</td>
+                  <td className="border p-2">{m.remision}</td>
                   <td className="border p-2">{m.conductor}</td>
                   <td className="border p-2">{m.placa}</td>
                   <td className="border p-2">

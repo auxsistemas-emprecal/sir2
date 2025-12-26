@@ -1,7 +1,7 @@
 // Importa token
 import { getToken } from "./authService";
 
-const BASE_URL = "http://192.168.150.8:8000";
+const BASE_URL = "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev";
 
 // Headers con token
 // Headers con token con log de depuración
@@ -750,6 +750,25 @@ export const fetchCreditosPorNombre = async (nombreTercero = "") => {
 };
 
 /**
+ * Obtiene todos los créditos de una remision.
+ */
+export const fetchCreditosPorRemision = async (remision = "0") => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/creditos/creditoPorRemision/${remision}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    const json = await response.json();
+    return json.data;
+  } catch (error) {
+    console.error("Error obteniendo créditos:", error);
+    return [];
+  }
+};
+
+/**
  * Crea un nuevo registro de crédito.
  * Endpoint: POST /creditos
  */
@@ -951,5 +970,93 @@ export const createCuadreDiario = async (arqueo) => {
   } catch (error) {
     console.error("❌ Error en createCuadreDiario:", error);
     throw error;
+  }
+};
+
+// ====================================================================
+// 🟦 CONTABILIDAD / FACTURACIÓN
+// ====================================================================
+
+/**
+ * Actualiza el número de factura de un movimiento específico.
+ * Se usa cuando ya existe la remisión y solo queremos asignarle la factura.
+ * @param {string|number} remision - El número de remisión.
+ * @param {string|number} n_factura - El número de factura a asignar.
+ */
+export const updateFacturaMovimiento = async (remision, n_factura) => {
+  try {
+    const res = await fetch(`${BASE_URL}/movimientos/factura/${remision}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ factura: n_factura }),
+    });
+
+    if (!res.ok) {
+      const errorDetails = await res.json();
+      throw new Error(errorDetails.message || `Error ${res.status} al actualizar factura`);
+    }
+
+    return await res.json();
+  } catch (error) {
+    console.error(`Error en updateFacturaMovimiento para remisión ${remision}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Registra una nueva factura en el sistema (POST).
+ * Útil si tienes una tabla independiente de facturas o auditoría.
+ */
+export const createRegistroFactura = async (datosFactura) => {
+  try {
+    const res = await fetch(`${BASE_URL}/facturas`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(datosFactura),
+    });
+
+    if (!res.ok) {
+      const errorDetails = await res.json();
+      throw new Error(errorDetails.message || "Error al crear registro de factura");
+    }
+
+    return await res.json();
+  } catch (error) {
+    console.error("Error en createRegistroFactura:", error);
+    throw error;
+  }
+};
+
+// ====================================================================
+// 🟦 Reporte de compras
+// ====================================================================
+
+export const fetchTotalMaterialPorTercero = async (tercero, inicio, fin) => {
+  try {
+    // Usamos encodeURIComponent por seguridad con los nombres
+    const response = await fetch(
+      `${BASE_URL}/totalMaterialPorTercero?tercero=${encodeURIComponent(tercero)}&inicio=${inicio}&fin=${fin}`,
+      { headers: getAuthHeaders() }
+    );
+    if (!response.ok) throw new Error("Error al obtener el reporte");
+    const json = await response.json();
+    // Validamos la estructura de Leapcell
+    return Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
+  } catch (error) {
+    console.error("Error en reporte:", error);
+    return [];
+  }
+};
+
+export const fetchTercerosBusqueda = async (query = "") => {
+  try {
+    const response = await fetch(`${BASE_URL}/terceros?search=${encodeURIComponent(query)}`, {
+      headers: getAuthHeaders(),
+    });
+    const json = await response.json();
+    return Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
+  } catch (error) {
+    console.error("Error en búsqueda:", error);
+    return [];
   }
 };
