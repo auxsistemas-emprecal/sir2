@@ -201,14 +201,6 @@ export default function AnticiposArchived({
       setTimeout(() => setNotificationMessage(null), 4000);
     }
   };
-  // const handlePagoClick = (anticipo) => {
-  //   if (onTogglePago) {
-  //     onTogglePago(anticipo);
-  //     const nuevoEstado = anticipo.pagado === 1 ? "PENDIENTE" : "PAGADO";
-  //     setNotificationMessage(`Estado de pago actualizado a ${nuevoEstado}`);
-  //     setTimeout(() => setNotificationMessage(null), 4000);
-  //   }
-  // };
 
   const handleOpenRemisiones = (lista) => {
     setSelectedRemisiones(lista);

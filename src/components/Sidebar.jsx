@@ -133,8 +133,6 @@
 //         />
 //       </nav>
 
-
-
 //       {/* BOTÓN CERRAR SESIÓN */}
 //       <div className="px-4 mb-4">
 //         <button
@@ -168,7 +166,6 @@
 //     <span className="font-medium">{label}</span>
 //   </button>
 // );
-
 
 // src/components/Sidebar.jsx
 
@@ -219,7 +216,7 @@ export default function Sidebar({
     <aside
       className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white transform transition-transform duration-300 ease-in-out ${
         isOpen ? "translate-x-0" : "-translate-x-full"
-      } lg:translate-x-0 lg:static lg:inset-auto shadow-2xl flex flex-col h-full`}
+      } lg:translate-x-0 lg:static lg:inset-auto shadow-2xl flex flex-col h-full `}
     >
       {/* ENCABEZADO */}
       <div className="flex items-center justify-between p-6 bg-slate-800 shrink-0">
@@ -235,7 +232,7 @@ export default function Sidebar({
       </div>
 
       {/* NAV */}
-      <nav className="mt-6 px-4 space-y-2 flex-1">
+      <nav className="mt-6 px-4 space-y-2 flex-1 overflow-y-auto no-scrollbar">
         <NavItem
           icon={<Home size={20} />}
           label="Inicio"
@@ -300,7 +297,7 @@ export default function Sidebar({
           onClick={() => setActiveTab("PreciosEspeciales")}
         />
 
-        <NavItem 
+        <NavItem
           icon={<BarChart3 size={20} />}
           label="Reporte Compras"
           active={activeTab === "reporteCompras"}
@@ -336,7 +333,7 @@ export default function Sidebar({
 
       {/* FOOTER */}
       <div className="p-4 text-xs text-slate-500 text-center shrink-0">
-        Versión 1.2.1 Final
+        Versión 1.2.1 
       </div>
     </aside>
   );
@@ -355,4 +352,3 @@ const NavItem = ({ icon, label, active, onClick }) => (
     <span className="font-medium">{label}</span>
   </button>
 );
-

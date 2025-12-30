@@ -17,6 +17,8 @@ import CreditosTable from "./components/CreditosTable.jsx";
 import ReporteCompras from "./components/ReporteCompras.jsx";
 import Contabilidad from "./components/Contabilidad.jsx";
 
+
+
 // Servicios
 import { getToken, logoutUser } from "./assets/services/authService.js";
 
@@ -428,6 +430,9 @@ export default function App() {
             Sistema Contable
           </h1>
         </header>
+        
+        
+
 
         <div className="p-6">
           {activeTab === "generador" && (
@@ -538,11 +543,6 @@ export default function App() {
 }
 
 
-
-
-
-
-
 // import React, { useState, useEffect, useCallback } from "react";
 // import { Menu } from "lucide-react";
 // import "./index.css";
@@ -559,6 +559,11 @@ export default function App() {
 // import MovimientosPage from "./components/MovimientosPage.jsx";
 // import CuadreCaja from "./components/CuadreCaja.jsx";
 // import CreditosTable from "./components/CreditosTable.jsx";
+// import ReporteCompras from "./components/ReporteCompras.jsx";
+// import Contabilidad from "./components/Contabilidad.jsx";
+
+// // 🆕 NUEVO: Apartado de Análisis e Inicio
+// import Inicio from "./components/Inicio.jsx";
 
 // // Servicios
 // import { getToken, logoutUser } from "./assets/services/authService.js";
@@ -584,6 +589,7 @@ export default function App() {
 //   fetchCreditosPorNombre,
 //   createCredito,
 //   updateCredito,
+//   fetchTotalMaterialPorTercero,
 // } from "./assets/services/apiService.js";
 
 // export default function App() {
@@ -773,14 +779,11 @@ export default function App() {
 //         );
 //       }
 
-//       console.log(headerData);
 //       if (headerData.idTipoPago === 4) {
 //         let creditoPayload = null;
-//         console.log(headerData.tercero);
 //         const resultadoCredito = await fetchCreditosPorNombre(
 //           headerData.tercero
 //         );
-//         console.log("Resultado credito: ", resultadoCredito);
 //         if (resultadoCredito.length === 0) {
 //           creditoPayload = {
 //             idTercero: headerData.idTercero,
@@ -792,7 +795,6 @@ export default function App() {
 //           await createCredito(creditoPayload);
 //         } else {
 //           let remisionesCredito = eval(resultadoCredito[0].remisiones);
-//           console.log(resultadoCredito[0]);
 //           remisionesCredito.push(remisionCreada.data[0].remision);
 //           creditoPayload = {
 //             ...resultadoCredito[0],
@@ -800,7 +802,6 @@ export default function App() {
 //             valorRemisiones:
 //               resultadoCredito[0].valorRemisiones + headerData.total,
 //           };
-//           console.log(creditoPayload);
 //           await updateCredito(resultadoCredito[0].idCredito, creditoPayload);
 //         }
 //       }
@@ -888,6 +889,42 @@ export default function App() {
 //     }
 //   };
 
+//   const handleTogglePagoAnticipo = async (anticipo) => {
+//     const nuevoEstadoPagado = anticipo.pagado === 1 ? 0 : 1;
+//     const fechaHoy = new Date().toISOString().split('T')[0];
+
+//     const idTipoPago = paymentTypes.find(
+//       (tipo) => tipo.tipo_pago === anticipo.tipoPago
+//     )?.idTipoPago;
+
+//     try {
+//       const payload = {
+//         id_pago: anticipo.id || anticipo.no_ingreso,
+//         no_ingreso: String(anticipo.noComprobante || ""),
+//         fecha: anticipo.fecha,
+//         idTercero: anticipo.idTercero,
+//         tipo: anticipo.tipo || "Anticipo",
+//         valor: Number(anticipo.valorAnticipo) || 0,
+//         valorRemisiones: Number(anticipo.valorAnticipo) - Number(anticipo.saldo),
+//         cedula: anticipo.cedula || "",
+//         telefono: anticipo.telefono || "",
+//         direccion: anticipo.direccion || "",
+//         concepto: anticipo.concepto || "",
+//         idTipoPago: String(idTipoPago || ""),
+//         estado: anticipo.estado,
+//         pagado: nuevoEstadoPagado,
+//         fechaPagado: nuevoEstadoPagado === 1 ? fechaHoy : null 
+//       };
+
+//       await updatePago(payload.id_pago, payload);
+//       await loadAnticipos();
+      
+//     } catch (error) {
+//       console.error("Error al actualizar estado de pago:", error);
+//       alert("No se pudo actualizar el estado de pago.");
+//     }
+//   };
+
 //   if (!isAuthenticated) {
 //     return <AuthForm onLogin={handleLoginSuccess} setUsuario={setUsuario} />;
 //   }
@@ -899,25 +936,19 @@ export default function App() {
 //         setIsOpen={setIsSidebarOpen}
 //         activeTab={activeTab}
 //         setActiveTab={(tab) => {
-//           // 1. Si el usuario hace clic en 'movimientos', cargamos los datos antes de cambiar
 //           if (tab === "movimientos") {
 //             loadMovimientos();
-//             loadAnticipos(); // Opcional, por si quieres refrescar todo al tiempo
+//             loadAnticipos();
 //           }
-
 //           if (tab === "creditos") {
 //             loadCreditos();
 //           }
-
-//           // 2. Mantener tus validaciones existentes
 //           if (tab !== "movimientos") setFiltroRemisionesMasivo(null);
 //           if (tab !== "anticipo") setAnticipoNoComprobanteToEdit(null);
 //           if (tab !== "generador") {
 //             setEditingMovement(null);
 //             setIsEditing(false);
 //           }
-
-//           // 3. Cambiar la pestaña
 //           setActiveTab(tab);
 //         }}
 //         onLogout={handleLogout}
@@ -937,6 +968,16 @@ export default function App() {
 //         </header>
 
 //         <div className="p-6">
+//           {/* 📊 NUEVO APARTADO: INICIO Y ANÁLISIS */}
+//           {activeTab === "inicio" && (
+//             <Inicio 
+//               movements={movements} 
+//               anticipos={anticipos} 
+//               terceros={terceros} 
+//               materials={materials} 
+//             />
+//           )}
+
 //           {activeTab === "generador" && (
 //             <InvoiceGenerator
 //               materials={materials}
@@ -962,6 +1003,15 @@ export default function App() {
 //             <CuadreCaja movements={movements} anticipos={anticipos} />
 //           )}
 
+//           {activeTab === "contabilidad" && (
+//             <Contabilidad 
+//               movements={movements} 
+//               anticipos={anticipos}
+//               activeTab={activeTab}
+//               setActiveTab={setActiveTab}
+//             />
+//           )}
+
 //           {activeTab === "anticipo" && (
 //             <AnticipoRegister
 //               terceros={terceros}
@@ -972,7 +1022,7 @@ export default function App() {
 //             />
 //           )}
 
-//           {activeTab === "creditos" && ( // 👈 7. Renderizado condicional
+//           {activeTab === "creditos" && (
 //             <CreditosTable data={creditos} />
 //           )}
 
@@ -994,6 +1044,7 @@ export default function App() {
 //               toggleAnticipoEstado={handleToggleAnticipoEstado}
 //               onEditAnticipo={startEditingAnticipo}
 //               onVerRemisionesAsociadas={handleVerRemisionesAsociadas}
+//               onTogglePago={handleTogglePagoAnticipo}
 //               onVerDetalleRemision={(numRemision) => {
 //                 const movimiento = movements.find(
 //                   (m) => String(m.remision) === String(numRemision)
@@ -1001,10 +1052,7 @@ export default function App() {
 //                 if (movimiento) {
 //                   startEditing(movimiento);
 //                 } else {
-//                   alert(
-//                     "No se encontró el registro físico de la remisión REM-" +
-//                       numRemision
-//                   );
+//                   alert("No se encontró la remisión REM-" + numRemision);
 //                 }
 //               }}
 //             />
@@ -1012,6 +1060,10 @@ export default function App() {
 
 //           {activeTab === "terceros" && (
 //             <Terceros data={terceros} setData={setTerceros} />
+//           )}
+
+//           {activeTab === "reporteCompras" && (
+//             <ReporteCompras />
 //           )}
 
 //           {activeTab === "config" && (
@@ -1029,3 +1081,5 @@ export default function App() {
 //     </div>
 //   );
 // }
+
+

@@ -1,7 +1,8 @@
 // Importa token
 import { getToken } from "./authService";
 
-const BASE_URL = "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev";
+const BASE_URL =
+  "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev";
 
 // Headers con token
 // Headers con token con log de depuración
@@ -156,6 +157,27 @@ export const updateMovimiento = async (remision, movimiento) => {
 export const cambiarEstadoMovimiento = async (remision, nuevo_estado) => {
   const res = await fetch(
     `${BASE_URL}/movimientos/cambiarEstado/${remision}?nuevo_estado=${nuevo_estado}`,
+    {
+      method: "PUT",
+      headers: getAuthHeaders(),
+    }
+  );
+
+  if (!res.ok) {
+    const errorDetails = await res.json();
+    console.error(
+      `Error ${res.status} al actualizar movimiento ${remision}:`,
+      errorDetails
+    );
+    throw new Error(`Fallo la actualización (Estatus: ${res.status})`);
+  }
+
+  return await res.json();
+};
+
+export const cambiarEstadoDePagoMovimiento = async (remision, nuevo_estado) => {
+  const res = await fetch(
+    `${BASE_URL}/movimientos/cambiarEstadoDePago/${remision}?nuevo_estado=${nuevo_estado}`,
     {
       method: "PUT",
       headers: getAuthHeaders(),
@@ -993,12 +1015,17 @@ export const updateFacturaMovimiento = async (remision, n_factura) => {
 
     if (!res.ok) {
       const errorDetails = await res.json();
-      throw new Error(errorDetails.message || `Error ${res.status} al actualizar factura`);
+      throw new Error(
+        errorDetails.message || `Error ${res.status} al actualizar factura`
+      );
     }
 
     return await res.json();
   } catch (error) {
-    console.error(`Error en updateFacturaMovimiento para remisión ${remision}:`, error);
+    console.error(
+      `Error en updateFacturaMovimiento para remisión ${remision}:`,
+      error
+    );
     throw error;
   }
 };
@@ -1017,7 +1044,9 @@ export const createRegistroFactura = async (datosFactura) => {
 
     if (!res.ok) {
       const errorDetails = await res.json();
-      throw new Error(errorDetails.message || "Error al crear registro de factura");
+      throw new Error(
+        errorDetails.message || "Error al crear registro de factura"
+      );
     }
 
     return await res.json();
@@ -1031,17 +1060,24 @@ export const createRegistroFactura = async (datosFactura) => {
 // 🟦 Reporte de compras
 // ====================================================================
 
+
 export const fetchTotalMaterialPorTercero = async (tercero, inicio, fin) => {
   try {
-    // Usamos encodeURIComponent por seguridad con los nombres
-    const response = await fetch(
-      `${BASE_URL}/totalMaterialPorTercero?tercero=${encodeURIComponent(tercero)}&inicio=${inicio}&fin=${fin}`,
-      { headers: getAuthHeaders() }
-    );
+    const url = `${BASE_URL}/totalMaterialPorTercero?nombreTercero=${encodeURIComponent(
+      tercero
+    )}&fechaInicio=${inicio}&fechaFin=${fin}`;
+
+    const response = await fetch(url, { headers: getAuthHeaders() });
+
     if (!response.ok) throw new Error("Error al obtener el reporte");
+
     const json = await response.json();
-    // Validamos la estructura de Leapcell
-    return Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
+
+    return Array.isArray(json.data)
+      ? json.data
+      : Array.isArray(json)
+      ? json
+      : [];
   } catch (error) {
     console.error("Error en reporte:", error);
     return [];
@@ -1050,13 +1086,58 @@ export const fetchTotalMaterialPorTercero = async (tercero, inicio, fin) => {
 
 export const fetchTercerosBusqueda = async (query = "") => {
   try {
-    const response = await fetch(`${BASE_URL}/terceros?search=${encodeURIComponent(query)}`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetch(
+      `${BASE_URL}/terceros?search=${encodeURIComponent(query)}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
     const json = await response.json();
-    return Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
+    return Array.isArray(json.data)
+      ? json.data
+      : Array.isArray(json)
+      ? json
+      : [];
   } catch (error) {
     console.error("Error en búsqueda:", error);
+    return [];
+  }
+};
+
+// Remisiones por tercero
+export const fetchRemisionesPorTercero = async (nombreTercero, inicio, fin) => {
+  try {
+    const res = await fetch(
+      `${BASE_URL}/totalMaterialPorTercero/remisionesPorTercero?nombreTercero=${encodeURIComponent(
+        nombreTercero
+      )}&fechaInicio=${inicio}&fechaFin=${fin}`,
+      { headers: getAuthHeaders() }
+    );
+
+    if (!res.ok) throw new Error("Error al obtener remisiones");
+
+    const json = await res.json();
+
+    return json.data ?? [];
+  } catch (e) {
+    console.error(e);
+    return [];
+  }
+};
+
+export const fetchItemsPorRemision = async (numRemision) => {
+  try {
+    const res = await fetch(
+      `${BASE_URL}/movimientoItems/remision/${numRemision}`,
+      { headers: getAuthHeaders() }
+    );
+
+    if (!res.ok) throw new Error("Error al obtener items de la remisión");
+
+    const json = await res.json();
+    return json.data ?? [];
+  } catch (e) {
+    console.error("Error items remisión:", e);
     return [];
   }
 };

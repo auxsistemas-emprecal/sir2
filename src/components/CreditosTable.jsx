@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   CreditCard,
   Search,
   Calendar,
   Eye,
   Tags,
-  ChevronRight,
+  Check,
   Receipt,
   FileText,
   ArrowRight,
@@ -16,13 +16,23 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { fetchMovimiento, updateCredito } from "../assets/services/apiService";
+import {
+  fetchMovimiento,
+  updateCredito,
+  updateMovimiento,
+  cambiarEstadoDePagoMovimiento,
+} from "../assets/services/apiService";
 
 export default function CreditosTable({ data }) {
+  const [dataTable, setDataTable] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [creditoSeleccionado, setCreditoSeleccionado] = useState(null);
   const [movimientosRelacionados, setMovimientosRelacionados] = useState([]);
+
+  useEffect(() => {
+    setDataTable(data);
+  }, [data]);
 
   const onVerDetalle = async (credito) => {
     try {
@@ -40,30 +50,112 @@ export default function CreditosTable({ data }) {
     }
   };
 
-  // const changePagado = async (credito) => {
-  //   const creditoPagado = {
-  //     ...credito,
-  //     pagado: +!credito.pagado, // Sí es 0 lo cambia a 1 y viceversa
-  //   };
-  //   await updateCredito(creditoPagado.idCredito, creditoPagado);
-  // };
-
-const changePagado = async (credito) => {
-  const ahoraColombia = new Date().toLocaleString("sv-SE", {
-    timeZone: "America/Bogota",
-  });
-  // sv-SE => formato YYYY-MM-DD HH:mm:ss (ideal para SQL)
-
-  const creditoPagado = {
-    ...credito,
-    pagado: +!credito.pagado,
-    fechaPagado: credito.pagado === 0 ? ahoraColombia : null,
+  const fixGMTDate = (dateString) => {
+    const date = new Date(dateString);
+    const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - userTimezoneOffset);
   };
 
-  await updateCredito(creditoPagado.idCredito, creditoPagado);
-};
+  const changePagado = async (credito, cambiarRemisiones = true) => {
+    const nuevoEstado = +!credito.pagado;
 
+    const ahoraColombia = new Date().toLocaleString("sv-SE", {
+      timeZone: "America/Bogota",
+    });
 
+    const remisionesArray = renderRemisionesArray(credito.remisiones);
+    const nuevosValores = await Promise.all(
+      remisionesArray.map(async (rem) => {
+        const mov = await fetchMovimiento(rem);
+        return mov;
+      })
+    );
+
+    const nuevoValorTotal = nuevosValores.reduce(
+      (sum, mov) => sum + (nuevoEstado !== 1 ? mov.total : 0),
+      0
+    );
+
+    const creditoPagado = {
+      ...credito,
+      pagado: nuevoEstado,
+      fechaPagado: credito.pagado === 0 ? ahoraColombia : null,
+      valorRemisiones: nuevoValorTotal,
+    };
+
+    await updateCredito(creditoPagado.idCredito, creditoPagado);
+
+    // Actualizar todos los mivimientos relacionados si es necesario
+    if (cambiarRemisiones) {
+      for (const remision of remisionesArray) {
+        console.log(
+          "Cambiando estado de remisión:",
+          remision,
+          " a ",
+          nuevoEstado
+        );
+        await cambiarEstadoDePagoMovimiento(remision, nuevoEstado);
+      }
+    }
+
+    setDataTable((prev) =>
+      prev.map((cred) =>
+        cred.idCredito === creditoPagado.idCredito ? creditoPagado : cred
+      )
+    );
+  };
+
+  const changePagadoRemision = async (remision, nuevoEstado) => {
+    const movimiento = movimientosRelacionados.find(
+      (mov) => mov.remision === remision
+    );
+    if (movimiento) {
+      const movimientoActualizado = {
+        ...movimiento,
+        pagado: nuevoEstado,
+      };
+
+      // Actualizar movimiento en la base de datos
+      await updateMovimiento(remision, movimientoActualizado);
+
+      // Actualizar el valor del crédito asociado
+      const creditoAsociado = creditoSeleccionado;
+      const remisionesArray = renderRemisionesArray(creditoAsociado.remisiones);
+      const nuevosValores = await Promise.all(
+        remisionesArray.map(async (rem) => {
+          const mov = await fetchMovimiento(rem);
+          return mov;
+        })
+      );
+
+      const nuevoValorTotal = nuevosValores.reduce(
+        (sum, mov) => sum + (mov.pagado !== 1 ? mov.total : 0),
+        0
+      );
+
+      const creditoActualizado = {
+        ...creditoAsociado,
+        valorRemisiones: nuevoValorTotal,
+      };
+
+      console.log(creditoActualizado);
+      await updateCredito(creditoActualizado.idCredito, creditoActualizado);
+
+      if (nuevoValorTotal === 0 && creditoActualizado.pagado !== 1) {
+        changePagado(creditoActualizado, false);
+      }
+
+      // Actualizar el estado del crédito seleccionado en el modal
+      setCreditoSeleccionado(creditoActualizado);
+
+      // Actualizar el estado local
+      setMovimientosRelacionados((prev) =>
+        prev.map((mov) =>
+          mov.remision === remision ? movimientoActualizado : mov
+        )
+      );
+    }
+  };
 
   const formatCurrency = (value) =>
     new Intl.NumberFormat("es-CO", {
@@ -72,7 +164,7 @@ const changePagado = async (credito) => {
       minimumFractionDigits: 0,
     }).format(value || 0);
 
-  const filteredData = data.filter((item) => {
+  const filteredData = dataTable.filter((item) => {
     const lowerTerm = searchTerm.toLowerCase();
     return (
       item.tercero?.toLowerCase().includes(lowerTerm) ||
@@ -382,16 +474,15 @@ const changePagado = async (credito) => {
                         : "[PENDIENTE]"}
                       {creditoSeleccionado.fechaPagado &&
                         " Fecha de pago: " +
-                          new Date(
+                          fixGMTDate(
                             creditoSeleccionado.fechaPagado
-                          ).toLocaleString("es-CO", {
+                          ).toLocaleDateString("es-CO", {
                             year: "numeric",
                             month: "2-digit",
                             day: "2-digit",
+                            hour12: true,
                             hour: "2-digit",
                             minute: "2-digit",
-                            hour12: true,
-                            // timeZone: "UTC",
                           })}
                     </span>
                   </div>
@@ -450,10 +541,34 @@ const changePagado = async (credito) => {
                                 </p>
                               </div>
                             </div>
-                            <ChevronRight
-                              size={20}
-                              className="text-gray-300 group-hover:text-indigo-600 transition-colors group-hover:translate-x-1"
-                            />
+                            <div
+                              onClick={() => {
+                                const nuevoEstado =
+                                  movimientosRelacionados.find(
+                                    (re) => re.remision === remision
+                                  ).pagado === 1
+                                    ? 0
+                                    : 1;
+                                changePagadoRemision(remision, nuevoEstado);
+                              }}
+                              className="flex items-center"
+                            >
+                              <Check
+                                size={20}
+                                className="text-gray-300 group-hover:text-indigo-600 transition-colors group-hover:translate-x-1"
+                              />
+                              {movimientosRelacionados.find(
+                                (re) => re.remision === remision
+                              ).pagado === 0 ? (
+                                <span className="ml-2 text-[10px] font-black text-rose-600 uppercase">
+                                  Pendiente
+                                </span>
+                              ) : (
+                                <span className="ml-2 text-[10px] font-black text-emerald-600 uppercase">
+                                  Pagado
+                                </span>
+                              )}
+                            </div>
                           </div>
                         );
                       }
