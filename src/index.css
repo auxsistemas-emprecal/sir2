@@ -15,68 +15,104 @@
     visibility: hidden !important;
   }
 
-  /* Hacemos visibles AMBOS componentes (Factura y Anticipo) */
+  /* Hacemos visibles los componentes de impresión */
   #invoice-print,
   #invoice-print *,
-  #anticipo-print,      
+  #anticipo-print,
   #anticipo-print *,
   #cuadre-print,
-  #cuadre-print * 
-  {  
+  #credit-print,
+  #credit-print *,
+  #cuadre-print * {
     visibility: visible !important;
   }
 
-  /* Limpieza de estilos */
+  /* Limpieza de estilos global */
   * {
     box-shadow: none !important;
     outline: none !important;
     filter: none !important;
-    background: transparent !important;
+    background: transparent !important; /* Esto borra los colores */
   }
 
-  /* -------- ESTILOS COMPARTIDOS PARA IMPRESIÓN -------- */
-  /* Aplicamos las mismas reglas de posicionamiento a ambos IDs */
-  #invoice-print, 
+  /* -------- REGLAS ESPECÍFICAS PARA EL BOTÓN DE PAGO -------- */
+
+  /* Forzamos el color del botón usando el ID que creaste */
+  #btn-pagado-remision {
+    background-color: #10b981 !important; /* Emerald-500 */
+    border-color: #10b981 !important;
+    color: white !important;
+    display: flex !important; /* Asegurar que no lo oculte la regla de 'display: none' de abajo */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Asegurar que el icono dentro del botón también sea blanco */
+  #btn-pagado-remision svg {
+    color: white !important;
+  }
+
+  /* -------- ESTILOS COMPARTIDOS PARA POSICIONAMIENTO -------- */
+  #invoice-print,
   #anticipo-print,
-  #cuadre-print {       /* <--- AGREGADO */
+  #credit-print,
+  #cuadre-print {
     position: absolute;
     top: 0;
-
-    /* CENTRAR en la hoja */
     left: 50% !important;
-
     width: 100% !important;
     max-width: 21.59cm !important;
-
-    /* height: 14cm !important;  <-- OJO: Anticipo puede ser más corto, quizás quieras quitar el height fijo o usar min-height */
-    min-height: 14cm !important; 
+    min-height: 14cm !important;
     background: #ffffff !important;
     margin: 0 !important;
     padding: 0 !important;
-
     border: none !important;
-    box-shadow: none !important;
-
-    /* Ajuste de escala */
     transform-origin: top center !important;
-
-    /* Ajustar escala para que NO se corte */
     transform: translateX(-50%) scale(0.78) !important;
   }
 
-  /* Página carta completa sin márgenes */
   @page {
     size: letter;
     margin: 0;
-    background: #ffffff !important;
+  }
+
+  /* -------- MEJORAS PARA EL MODAL DE CRÉDITOS -------- */
+
+  /* Restaurar el fondo degradado de la tarjeta principal de Deuda */
+  #credit-print .bg-linear-to-br {
+    background: linear-gradient(to bottom right, #6366f1, #4338ca) !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #credit-print .text-white {
+    color: white !important;
+  }
+
+  /* Corregir el corte de contenido (Scroll) */
+  #credit-print .overflow-y-auto,
+  #credit-print .custom-scrollbar {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  #credit-print > div {
+    max-height: none !important;
+    border: none !important;
+  }
+
+  /* Ocultar botones de la interfaz que NO sean el de pago */
+  #credit-print button:not(#btn-pagado-remision) {
+    display: none !important;
   }
 }
 
-/* Utility: ocultar scrollbar pero mantener scroll funcional */
+/* Utility: ocultar scrollbar */
 .no-scrollbar {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 .no-scrollbar::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
+  display: none;
 }

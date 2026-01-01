@@ -511,27 +511,6 @@ export default function InvoiceGenerator({
     // 2. Abrir el modal de confirmación
     setShowModal(true);
   };
-  // const handleAttemptSave = () => {
-  //   // 1. Validaciones básicas: cliente y al menos una cantidad > 0
-  //   const anyCantidad = lineItems.some(
-  //     (li) => (parseFloat(li.cantidad) || 0) > 0
-  //   );
-  //   const checkSaldo = estadoDeCuenta.valorRemision > estadoDeCuenta.saldo;
-  //   if (!formData.tercero || !anyCantidad) {
-  //     alert(
-  //       "Asegúrate de ingresar Cliente/Tercero y al menos una Cantidad mayor a 0 en los materiales."
-  //     );
-  //     return;
-  //   }
-  //   if (formData.tipoPago === "Pago por anticipado" && checkSaldo) {
-  //     alert(
-  //       "El Cliente no cuenta con saldo suficiente para hacer esta remisión."
-  //     );
-  //     return;
-  //   }
-  //   // 2. Si las validaciones pasan, mostramos el modal
-  //   setShowModal(true);
-  // };
 
   function compararDatos(
     datosOriginales = {},

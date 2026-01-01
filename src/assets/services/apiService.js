@@ -238,6 +238,7 @@ export const updateMovimientoStatus = async (remision, newState) => {
 
     //SOBRESCRIBIR EL ESTADO
     estado: newState,
+    usuario: movimientoActual.usuario
   };
 
   //Enviar la actualización PUT al endpoint seguro /movimientos/{remision}.
@@ -868,6 +869,63 @@ export const createGasto = async (gasto) => {
   }
 };
 
+// ====================================================================
+// ********************CUADRE CAJA*****************************+******* 
+// ====================================================================
+
+// ====================================================================
+// 📊 Registro de Gastos (PERSISTENCIA)
+// ====================================================================
+
+export const fetchGastosPorFecha = async (fecha) => {
+  try {
+    const response = await fetch(`${BASE_URL}/gastos_diarios/fecha/${fecha}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) return [];
+    const json = await response.json();
+    // Ajusta según si tu API devuelve el array directo o dentro de una propiedad 'data'
+    return Array.isArray(json) ? json : json.data || [];
+  } catch (error) {
+    console.error("Error obteniendo gastos por fecha:", error);
+    return [];
+  }
+};
+
+// ====================================================================
+// 📊 Elimina Registro de Gastos 
+// ====================================================================
+
+  export const deleteGastoDiario = async (id) => {
+  try {
+    const res = await fetch(`${BASE_URL}/gastos_diarios/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+
+    if (!res.ok) throw new Error("No se pudo eliminar el gasto");
+    return true;
+  } catch (e) {
+    console.error(e);
+    throw e;
+  }
+};
+
+// export const deleteGastoDiario = async (id) => {
+//   try {
+//     const response = await fetch(`${BASE_URL}/gastos_diarios/${id}`, {
+//       method: "DELETE",
+//       headers: getAuthHeaders(),
+//     });
+//     if (!response.ok) {
+//       throw new Error("No se pudo eliminar el gasto de la base de datos");
+//     }
+//     return true;
+//   } catch (error) {
+//     console.error("Error eliminando gasto:", error);
+//     return false;
+//   }
+// };
 // ====================================================================
 // 📊 CUADRE DE CAJA (PERSISTENCIA)
 // ====================================================================
