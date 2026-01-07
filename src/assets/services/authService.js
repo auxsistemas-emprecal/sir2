@@ -1,46 +1,11 @@
-
 // ------------------------ ARCHIVO DE AUTENTICACIÓN (authService.js) ------------------------
+// true = modo edicion
+// false = modo real 
+const isDev = false;
 
-// const BASE_URL = "http://192.168.150.4:8000";
-// const LOGIN_URL = `${BASE_URL}/auth/token`;
-
-// export const loginUser = async (data) => {
-//   try {
-//     const body = new URLSearchParams();
-//     body.append("username", data.usuario);
-//     body.append("password", data.contrasena);
-
-//     const res = await fetch(LOGIN_URL, {
-//       method: "POST",
-//       headers: {
-//         "Content-Type": "application/x-www-form-urlencoded",
-//       },
-//       body: body,
-//     });
-
-//     const result = await res.json();
-
-//     if (res.ok && result.access_token) {
-//       // Usa la clave "userToken" para guardar el JWT
-//       localStorage.setItem("userToken", result.access_token);
-//       return { ok: true, data: result };
-//     }
-
-//     return { ok: false, error: result };
-//   } catch (err) {
-//     console.error("Error login:", err);
-//     return { ok: false, error: "Error de servidor o red" };
-//   }
-// };
-
-// // Exporta la función para obtener el token con la clave correcta
-// export const getToken = () => localStorage.getItem("userToken");
-
-// export const logoutUser = () => localStorage.removeItem("userToken");
-
-// ------------------------ ARCHIVO DE AUTENTICACIÓN (authService.js) ------------------------
-
-const BASE_URL = "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev";
+const BASE_URL = !isDev
+  ? "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev"
+  : "192.168.150.33:8000";
 const LOGIN_URL = `${BASE_URL}/auth/token`;
 
 /**
@@ -60,7 +25,6 @@ export const loginUser = async (data) => {
     });
 
     const result = await res.json();
-
     if (res.ok && result.access_token) {
       // Guardar token en localStorage
       localStorage.setItem("userToken", result.access_token);
@@ -91,5 +55,3 @@ export const getAuthHeaders = () => ({
   "Content-Type": "application/json",
   Authorization: `Bearer ${getToken()}`,
 });
-
-

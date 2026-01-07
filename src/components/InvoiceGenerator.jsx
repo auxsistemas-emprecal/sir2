@@ -9,7 +9,7 @@ import InputAutosuggest from "../components/InputAutosuggest";
 import { createMovimiento } from "../assets/services/apiService";
 import {
   searchTercero,
-  fetchPreciosEspeciales,
+  // fetchPreciosEspeciales,
   fetchMateriales,
   fetchLastRemisionNumber,
   fetchMovimiento,
@@ -20,6 +20,7 @@ import {
   updatePago,
   updateCredito,
   fetchCreditosPorNombre,
+  fetchPreciosEspecialesPorTercero,
 } from "../assets/services/apiService";
 
 // --- Nuevo Componente: Modal de Confirmación ---
@@ -60,6 +61,21 @@ const Modal = ({
 // ----------------------------------------------
 //-----------------------------------------------
 
+function formatearRemision(remision) {
+  const numeroDigitos = 6;
+  const remisionLength = remision.toString().length;
+  const numberOfZeros = numeroDigitos - remisionLength;
+  let formatedRemision = "";
+
+  for (let i = 0; i < numberOfZeros; i++) {
+    formatedRemision += "0";
+  }
+
+  formatedRemision += remision;
+
+  return formatedRemision;
+}
+
 export default function InvoiceGenerator({
   setMaterials,
   materials = [],
@@ -79,7 +95,11 @@ export default function InvoiceGenerator({
   const defaultPaymentType =
     paymentTypes.length > 0
       ? paymentTypes[0]
-      : { tipo_pago: "Efectivo", idTipoPago: 1, name: "Efectivo" };
+      : { tipo_pago: "", idTipoPago: null, name: "" };
+  // const defaultPaymentType =
+  //   paymentTypes.length > 0
+  //     ? paymentTypes[0]
+  //     : { tipo_pago: "Efectivo", idTipoPago: 1, name: "Efectivo" };
 
   // Función auxiliar para obtener fecha y hora en zona horaria de Colombia
   const getColombiaDateParts = (dateString) => {
@@ -116,13 +136,16 @@ export default function InvoiceGenerator({
     telefono: "",
     direccion: "",
     placa: "",
+    cubica: "",
     incluirIva: false,
     incluirRet: false,
-    tipoPago:
-      paymentTypes.length > 0
-        ? paymentTypes[0].tipo_pago ?? paymentTypes[0].name
-        : "Efectivo",
-    idTipoPago: paymentTypes.length > 0 ? paymentTypes[0].idTipoPago ?? 1 : 1, // <--- 🛑 NUEVO: Para guardar el ID del tipo de pago
+    tipoPago: "", // Cambiado: antes decía paymentTypes[0]... o "Efectivo"
+    idTipoPago: null,
+    // tipoPago:
+    //   paymentTypes.length > 0
+    //     ? paymentTypes[0].tipo_pago ?? paymentTypes[0].name
+    //     : "Efectivo",
+    // idTipoPago: paymentTypes.length > 0 ? paymentTypes[0].idTipoPago ?? 1 : 1, // <--- 🛑 NUEVO: Para guardar el ID del tipo de pago
     observacion: "",
     horaLlegada: initialDateParts.hora,
     horaSalida: "",
@@ -187,14 +210,29 @@ export default function InvoiceGenerator({
   useEffect(() => {
     (async () => {
       // 1. Verificar que estamos en modo edición y que los datos existen
-      if (editingMovement && editingItems.data.length > 0) {
-        console.log(
-          "Modo Edición: Inicializando formulario con datos compartidos."
-        );
-
+      if (editingMovement && editingItems?.data) {
         const responseMovimiento = await fetchMovimiento(
           editingMovement.remision
         );
+        // if (editingMovement && editingItems.data.length > 0) {
+        //   console.log(
+        //     "Modo Edición: Inicializando formulario con datos compartidos."
+        //   );
+
+        // const responseMovimiento = await fetchMovimiento(
+        //   editingMovement.remision
+        // );
+
+        let cubicajeRecuperado = "";
+        try {
+          const terceros = await searchTercero(editingMovement.tercero);
+          const elTercero = terceros.find(
+            (t) => t.nombre === editingMovement.tercero
+          );
+          if (elTercero) cubicajeRecuperado = elTercero.cubica;
+        } catch (e) {
+          console.error("Error recuperando cubicaje", e);
+        }
 
         // -----------------------------------------------------------
         // A. Inicializar la Cabecera (formData) Editar
@@ -215,6 +253,7 @@ export default function InvoiceGenerator({
             fecha: fecha,
             horaLlegada: hora,
             tipoPago: editingMovement.tipo_pago,
+            cubica: cubicajeRecuperado,
 
             // Si tiene un campo 'date', asegúrese de que el formato sea el correcto para el input.
           };
@@ -229,20 +268,38 @@ export default function InvoiceGenerator({
           setPagosAnticipados(resp);
         });
         // -----------------------------------------------------------
-        // B. Inicializar los Ítems (lineItems)
+        // B. Inicializar los Ítems (lineItems) - CORREGIDO
         // -----------------------------------------------------------
-        // Mapeamos los ítems detallados para asegurarnos de que los valores numéricos
-        // (cantidad, precio) sean Strings, si sus inputs esperan strings.
-        const mappedItems = editingItems.data.map((item) => ({
-          ...item,
-          // Aseguramos que los valores que van a los inputs de texto sean strings
-          idMaterial: item.idMaterial,
-          cantidad: String(item.cantidad),
-          precioUnitario: String(item.precioUnitario),
+        const mappedItems = editingItems.data.map((item) => {
+          // Buscamos el material en la lista maestra para recuperar su nombre/descripción
+          const materialInfo = materials.find(
+            (m) => m.idMaterial === item.idMaterial
+          );
 
-          // Si necesita el nombre del material, lo puede añadir aquí
-          // nombreMaterial: item.nombreMaterial // Asumiendo que viene en la prop o lo puede buscar
-        }));
+          return {
+            ...item,
+            // Mantenemos el ID
+            idMaterial: item.idMaterial,
+
+            // Pasamos a String para los inputs
+            cantidad: String(item.cantidad),
+            precioUnitario: String(item.precioUnitario),
+
+            // RECUPERAMOS EL NOMBRE:
+            // 1. Intentamos con lo que viene del servidor (nombre_material o descripcion)
+            // 2. Si no viene, lo buscamos en la lista maestra 'materials' por el ID
+            nombre_material:
+              item.nombre_material ||
+              item.descripcion ||
+              materialInfo?.nombre_material ||
+              "",
+            descripcion:
+              item.descripcion ||
+              item.nombre_material ||
+              materialInfo?.nombre_material ||
+              "",
+          };
+        });
 
         setLineItems(mappedItems);
       } else {
@@ -254,13 +311,6 @@ export default function InvoiceGenerator({
 
   // si cambia la lista de materials, actualizamos la primer línea si estaba vacía
   useEffect(() => {
-    (async () => {
-      // cargar precios especiales si no están cargados
-      if (preciosEspeciales.length === 0) {
-        const responsePE = await fetchPreciosEspeciales();
-        setPreciosEspeciales(responsePE);
-      }
-    })();
     setLineItems((prev) => {
       // si primer item no tiene idMaterial y materials trae algo, rellenarlo
       if (prev.length === 1 && !prev[0].idMaterial && materials.length > 0) {
@@ -339,10 +389,19 @@ export default function InvoiceGenerator({
         telefono: completeObject.telefono,
         direccion: completeObject.direccion,
         placa: completeObject.placa,
+        cubica: completeObject.cubica,
       }));
       fetchPagosPorNombre(completeObject.nombre).then((resp) => {
         console.log("Pagos anticipados del tercero:", resp);
         setPagosAnticipados(resp);
+      });
+      const oldMaterials = { ...materials };
+      fetchPreciosEspecialesPorTercero(completeObject.nombre).then((resp) => {
+        if (Boolean(resp[0])) {
+          setPreciosEspeciales(resp);
+          return;
+        }
+        setPreciosEspeciales(oldMaterials);
       });
       return;
     } else if (name == "tercero") {
@@ -355,23 +414,46 @@ export default function InvoiceGenerator({
       }));
     }
 
-    // 2. Lógica para Tipo de Pago
     if (name === "tipoPago") {
       if (isEditing) return;
-      // Buscar el ID en la lista de tipos de pago
+
+      // Si el valor es vacío (la opción por defecto), limpiamos y salimos
+      if (value === "") {
+        setFormData((prev) => ({ ...prev, tipoPago: "", idTipoPago: null }));
+        console.log("Pago seleccionado: Nulo (Opción por defecto)");
+        return;
+      }
+
       const selectedPayment = paymentTypes.find(
         (p) => (p.tipo_pago || p.name) === value
       );
 
+      console.log("Pago seleccionado:", selectedPayment); // Ya no será undefined
+
       setFormData((prev) => ({
         ...prev,
         tipoPago: value,
-        // CORRECCIÓN AQUÍ: Usar el ID del pago encontrado
         idTipoPago: selectedPayment?.idTipoPago || selectedPayment?.id || null,
       }));
-      // Manejo de pagos anticipados de ese tercero
       return;
     }
+    // 2. Lógica para Tipo de Pago
+    // if (name === "tipoPago") {
+    //   if (isEditing) return;
+    //   // Buscar el ID en la lista de tipos de pago
+    //   const selectedPayment = paymentTypes.find(
+    //     (p) => (p.tipo_pago || p.name) === value
+    //   );
+
+    //   setFormData((prev) => ({
+    //     ...prev,
+    //     tipoPago: value,
+    //     // CORRECCIÓN AQUÍ: Usar el ID del pago encontrado
+    //     idTipoPago: selectedPayment?.idTipoPago || selectedPayment?.id || null,
+    //   }));
+    //   // Manejo de pagos anticipados de ese tercero
+    //   return;
+    // }
 
     // Lógica si es pago anticipado
     if (name === "no_ingreso") {
@@ -398,6 +480,10 @@ export default function InvoiceGenerator({
       [name]: type === "checkbox" ? checked : value,
     }));
   };
+  // =================================================================================================================
+  //                                                  original
+  // =================================================================================================================
+
   // cambios en una fila (line item)
   const handleLineChange = (index, field, value) => {
     setLineItems((prev) =>
@@ -411,11 +497,26 @@ export default function InvoiceGenerator({
             const idNum = Number(value);
             selected = materials.find((m) => Number(m.idMaterial) === idNum);
             if (selected) {
-              const id_tercero_material =
-                formData.idTercero + "_" + selected.idMaterial;
-              const materialPE = preciosEspeciales.filter(
-                (el) => el.id_tercero_material === id_tercero_material
-              );
+              const nombreMaterialSelected = selected.nombre_material;
+              let materialPE = [];
+              if (preciosEspeciales.length > 0) {
+                comaterialPE = preciosEspeciales.filter(
+                  (el) => el.nombre_material === nombreMaterialSelected
+                );
+                setMaterials((prevMaterials) => {
+                  const newMaterials = prevMaterials.map((mat) => {
+                    if (mat.idMaterial === selected.idMaterial) {
+                      return {
+                        ...mat,
+                        precio: materialPE[0]?.precio ?? mat.precio,
+                      };
+                    }
+                    return mat;
+                  });
+                  console.log(newMaterials);
+                  return newMaterials;
+                });
+              }
               return {
                 ...li,
                 idMaterial: selected.idMaterial,
@@ -460,6 +561,99 @@ export default function InvoiceGenerator({
     );
   };
 
+  // const handleLineChange = (index, field, value) => {
+  //   setLineItems((prev) =>
+  //     prev.map((li, i) => {
+  //       if (i !== index) return li;
+
+  //       if (field === "idMaterial" || field === "nombre_material") {
+  //         let selected = materials.find(m =>
+  //           field === "idMaterial" ? Number(m.idMaterial) === Number(value) : m.nombre_material === value
+  //         );
+
+  //         if (selected) {
+  //           // 1. Nombre que el usuario seleccionó en la remisión (ej: "CONCREMOVIL")
+  //           const nombreActualRemision = (formData.tercero || "").toString().trim().toUpperCase();
+  //           const idMaterialSeleccionado = Number(selected.idMaterial);
+
+  //           /* 2. BÚSQUEDA DINÁMICA:
+  //              No usamos IDs fijos. Buscamos en preciosEspeciales si hay un registro
+  //              donde el nombre del tercero sea igual al nombre actual.
+  //           */
+  //           const tarifaEspecial = preciosEspeciales.find((pe) => {
+  //             // Buscamos el nombre del tercero asociado a este precio especial.
+  //             // Nota: He usado 'owners' porque es común, pero si tu variable
+  //             // de la lista de terceros tiene otro nombre, cámbialo aquí abajo.
+  //             const terceroRelacionado = (typeof owners !== 'undefined' ? owners : []).find(o => Number(o.id) === Number(pe.id_tercero));
+
+  //             // Si el nombre del dueño de la tarifa coincide con el de la remisión
+  //             const nombreTarifa = terceroRelacionado ? terceroRelacionado.nombre_tercero.trim().toUpperCase() : "";
+
+  //             return nombreTarifa === nombreActualRemision &&
+  //                    Number(pe.idMaterial) === idMaterialSeleccionado;
+  //           });
+
+  //           return {
+  //             ...li,
+  //             idMaterial: selected.idMaterial,
+  //             nombre_material: selected.nombre_material,
+  //             // Si coincide el nombre del grupo, pone el precio especial, si no el normal
+  //             precioUnitario: tarifaEspecial ? Number(tarifaEspecial.precio) : Number(selected.precio),
+  //           };
+  //         }
+  //       }
+  //       return { ...li, [field]: value };
+  //     })
+  //   );
+  // };
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // const handleLineChange = (index, field, value) => {
+  //     setLineItems((prev) =>
+  //       prev.map((li, i) => {
+  //         if (i !== index) return li;
+
+  //         if (field === "idMaterial" || field === "nombre_material") {
+  //           let selected = null;
+  //           if (field === "idMaterial") {
+  //             const idNum = Number(value);
+  //             selected = materials.find((m) => Number(m.idMaterial) === idNum);
+  //           } else {
+  //             selected = materials.find((m) => m.nombre_material === value);
+  //           }
+
+  //           if (selected) {
+  //             // 1. Identificamos al cliente actual de la remisión
+  //             const clienteActual = terceros.find(t => Number(t.id) === Number(formData.idTercero));
+  //             const nombreBusqueda = clienteActual ? clienteActual.nombre_tercero : "";
+
+  //             // 2. Buscamos el precio especial que coincida con ese NOMBRE de empresa
+  //             const precioEspecial = preciosEspeciales.find((pe) => {
+  //               return pe.nombreTercero === nombreBusqueda &&
+  //                       Number(pe.idMaterial) === Number(selected.idMaterial);
+  //             });
+
+  //             return {
+  //               ...li,
+  //               idMaterial: selected.idMaterial,
+  //               nombre_material: selected.nombre_material,
+  //               // Si existe el precio para esa empresa, lo pone; si no, el estándar
+  //               precioUnitario: precioEspecial ? precioEspecial.precio : selected.precio,
+  //             };
+  //           }
+  //         }
+
+  //         if (field === "cantidad") return { ...li, cantidad: value === "" ? "" : Number(value) };
+  //         if (field === "precioUnitario") return { ...li, precioUnitario: value === "" ? "" : Number(value) };
+
+  //         return { ...li, [field]: value };
+  //       })
+  //     );
+  //   };
+  //=============================================================================================================
+  //=============================================================================================================
+
   const addLine = () => {
     const newLine = {
       id: Date.now() + Math.random(),
@@ -493,6 +687,11 @@ export default function InvoiceGenerator({
       (li) => (parseFloat(li.cantidad) || 0) > 0
     );
     const checkSaldo = estadoDeCuenta.valorRemision > estadoDeCuenta.saldo;
+
+    if (!formData.tipoPago || formData.tipoPago === "") {
+      alert("Por favor, seleccione un tipo de pago antes de continuar.");
+      return;
+    }
 
     if (!formData.tercero || !anyCantidad) {
       alert(
@@ -540,23 +739,32 @@ export default function InvoiceGenerator({
     return cambios;
   }
   //====================================================================================================================
-
+  // --- FUNCIONES DE GUARDADO Y FORMATO (FUNCIONALIDAD ORIGINAL PRESERVADA) ---
   //====================================================================================================================
+
+  const formatCurrency = (val) =>
+    new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(val || 0);
+
   const handleConfirmSave = async () => {
-    setIsLoading(true); // [NUEVO] Inicia el estado de carga al presionar "Aceptar" en el modal
+    setIsLoading(true);
     setShowModal(false);
 
     try {
-      const totalCubicaje = lineItems.reduce((acc, item) => {
-        return acc + (Number(item.cantidad) || 0);
-      }, 0);
+      // CAMBIO CLAVE: Ya no usamos el .reduce() que sumaba las cantidades de la tabla.
+      // Usamos el valor que ya trae el formulario (formData.cubica), que es el que puso el Tercero.
+      const totalCubicaje = formData.cubica;
 
-      // 1. Crear fecha combinada localmente
+      // 1. Crear fecha combinada localmente (Lógica Original)
       const fechaLocal = new Date(
         `${formData.fecha}T${formData.horaLlegada}:00`
       );
 
-      // 2. Restar el offset de la zona horaria
+      // 2. Restar el offset de la zona horaria (Lógica Original)
       const fechaISO = new Date(
         fechaLocal.getTime() - fechaLocal.getTimezoneOffset() * 60000
       ).toISOString();
@@ -564,6 +772,7 @@ export default function InvoiceGenerator({
       let remisionLastNumber = await fetchLastRemisionNumber();
       remisionLastNumber = (remisionLastNumber.data[0]?.remision || 0) + 1;
 
+      // --- FUNCIONALIDAD DE ANTICIPOS (PRESERVADA) ---
       let estadoDeCuentaPayload = null;
       if (formData.tipoPago === "Pago por anticipado") {
         estadoDeCuentaPayload = await fetchPagosPorNoIngreso(
@@ -583,6 +792,7 @@ export default function InvoiceGenerator({
         delete estadoDeCuentaPayload.saldo;
       }
 
+      // --- FUNCIONALIDAD DE CRÉDITOS (PRESERVADA) ---
       let creditoActualizarPayload = null;
       if (isEditing && formData.idTipoPago === 4) {
         const respuestaCredito = await fetchCreditosPorNombre(formData.tercero);
@@ -611,7 +821,7 @@ export default function InvoiceGenerator({
         estado: "VIGENTE",
         pagado: 0,
         factura: 0,
-        cubicaje: totalCubicaje,
+        cubicaje: totalCubicaje, // Se guarda el valor literal (ej: 9.41)
         subtotal: Number(calculos.subtotal) || 0,
         iva: Number(calculos.iva) || 0,
         retencion: Number(calculos.retencion) || 0,
@@ -637,10 +847,12 @@ export default function InvoiceGenerator({
           iva: Number(calculos.iva) || 0,
           retencion: Number(calculos.retencion) || 0,
           total: Number(calculos.total) || 0,
+          cubicaje: totalCubicaje,
         };
 
         const usuario = localStorage.getItem("usuario") || "Desconocido";
 
+        // --- LÓGICA DE AUDITORÍA/CAMBIOS (PRESERVADA) ---
         let cambios = compararDatos(editingMovement, datosActualizar, usuario);
 
         lineItems.forEach((item, idx) => {
@@ -654,76 +866,249 @@ export default function InvoiceGenerator({
         };
 
         await updateMovimiento(editingMovement.remision, datosActualizar);
-        if (estadoDeCuentaPayload) {
+        if (estadoDeCuentaPayload)
           await updatePago(
             estadoDeCuentaPayload.no_ingreso,
             estadoDeCuentaPayload
           );
-        }
-        if (creditoActualizarPayload) {
-          console.log("Créditos: ", creditoActualizarPayload);
+        if (creditoActualizarPayload)
           await updateCredito(
             creditoActualizarPayload.idCredito,
             creditoActualizarPayload
           );
-        }
       } else {
         const responseSaved = await onSave(payloadHeader, lineItems);
         setFormData({
           ...payloadHeader,
+          cubica: totalCubicaje,
           remision: responseSaved.data[0].remision,
         });
       }
 
-      // --- LÓGICA DE ÉXITO ---
-      setLastSavedRecord({ ...payloadHeader, materiales: lineItems });
+      setLastSavedRecord({
+        ...payloadHeader,
+        cubica: totalCubicaje,
+        materiales: lineItems,
+      });
     } catch (error) {
       console.error("Fallo al guardar:", error);
       alert(`❌ Error al guardar: ${error.message}`);
     } finally {
-      setIsLoading(false); // [NUEVO] IMPORTANTE: Siempre apaga el cargando, falle o funcione.
+      setIsLoading(false);
     }
   };
 
   const handleNewRecord = () => {
-    const currentParts = getColombiaDateParts(); // Usar la función auxiliar
-
+    const currentParts = getColombiaDateParts();
     setFormData((prev) => ({
       ...initialFormData,
       remision: prev.remision,
-      fecha: currentParts.fecha, // Fecha Colombia
-      horaLlegada: currentParts.hora, // Hora Colombia
+      fecha: currentParts.fecha,
+      horaLlegada: currentParts.hora,
     }));
     setLineItems(initialLineItems);
     setCalculos({ subtotal: 0, iva: 0, retencion: 0, total: 0 });
     setLastSavedRecord(null);
   };
 
-  const formatCurrency = (val) =>
-    new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(val);
+  // --- VISTA PREVIA (PRESERVADA Y CORREGIDA) ---
+  const previewData = lastSavedRecord
+    ? { ...lastSavedRecord, cubica: lastSavedRecord.cubica }
+    : {
+        ...formData,
+        cubica: formData.cubica, // No procesa el número para evitar redondeos
+        materiales: lineItems,
+        ...calculos,
+      };
 
-  // Determinar qué datos usar para la vista previa: el guardado si existe, o el formulario actual
-  const previewData = lastSavedRecord || {
-    ...formData,
-    materiales: lineItems.map((li) => ({
-      ...li,
-      cantidad: Number(li.cantidad) || 0,
-      precioUnitario: Number(li.precioUnitario) || 0,
-    })),
-    ...calculos,
-  };
+  //====================================================================================================================
 
-  ///todo lo estetico 
-  
+  //====================================================================================================================
+  //   const handleConfirmSave = async () => {
+  //     setIsLoading(true); // [NUEVO] Inicia el estado de carga al presionar "Aceptar" en el modal
+  //     setShowModal(false);
+
+  //     try {
+  //       const totalCubicaje = lineItems.reduce((acc, item) => {
+  //         return acc + (Number(item.cantidad) || 0);
+  //       }, 0);
+
+  //       // 1. Crear fecha combinada localmente
+  //       const fechaLocal = new Date(
+  //         `${formData.fecha}T${formData.horaLlegada}:00`
+  //       );
+
+  //       // 2. Restar el offset de la zona horaria
+  //       const fechaISO = new Date(
+  //         fechaLocal.getTime() - fechaLocal.getTimezoneOffset() * 60000
+  //       ).toISOString();
+
+  //       let remisionLastNumber = await fetchLastRemisionNumber();
+  //       remisionLastNumber = (remisionLastNumber.data[0]?.remision || 0) + 1;
+
+  //       let estadoDeCuentaPayload = null;
+  //       if (formData.tipoPago === "Pago por anticipado") {
+  //         estadoDeCuentaPayload = await fetchPagosPorNoIngreso(
+  //           estadoDeCuenta.no_ingreso
+  //         );
+  //         estadoDeCuentaPayload = estadoDeCuentaPayload[0];
+  //         let remisionesArray = eval(estadoDeCuentaPayload.remisiones);
+  //         if (!isEditing) remisionesArray.push(remisionLastNumber);
+  //         estadoDeCuentaPayload = {
+  //           ...estadoDeCuentaPayload,
+  //           remisiones: `[${remisionesArray}]`,
+  //           valorRemisiones:
+  //             estadoDeCuentaPayload.valorRemisiones +
+  //             estadoDeCuenta.valorRemision -
+  //             (editingMovement?.total || 0),
+  //         };
+  //         delete estadoDeCuentaPayload.saldo;
+  //       }
+
+  //       let creditoActualizarPayload = null;
+  //       if (isEditing && formData.idTipoPago === 4) {
+  //         const respuestaCredito = await fetchCreditosPorNombre(formData.tercero);
+  //         const creditoEnDB = respuestaCredito[0];
+  //         creditoActualizarPayload = {
+  //           ...creditoEnDB,
+  //           valorRemisiones:
+  //             creditoEnDB.valorRemisiones -
+  //             editingMovement.total +
+  //             calculos.total,
+  //         };
+  //       }
+
+  //       const payloadHeader = {
+  //         fecha: fechaISO,
+  //         remision: remisionLastNumber,
+  //         idTercero: formData.idTercero ? parseInt(formData.idTercero) : 0,
+  //         idTipoPago: formData.idTipoPago,
+  //         placa: formData.placa || "",
+  //         direccion: formData.direccion || "",
+  //         observacion: formData.observacion || "",
+  //         conductor: formData.conductor || "",
+  //         cedula: formData.cedula || "",
+  //         telefono: formData.telefono || "",
+  //         no_ingreso: "",
+  //         estado: "VIGENTE",
+  //         pagado: 0,
+  //         factura: 0,
+  //         cubicaje: totalCubicaje,
+  //         subtotal: Number(calculos.subtotal) || 0,
+  //         iva: Number(calculos.iva) || 0,
+  //         retencion: Number(calculos.retencion) || 0,
+  //         total: Number(calculos.total) || 0,
+  //         incluir_iva: formData.incluirIva ? 1 : 0,
+  //         incluir_ret: formData.incluirRet ? 1 : 0,
+  //         tercero: formData.tercero,
+  //         horaLlegada: formData.horaLlegada,
+  //         tipoPago: formData.tipoPago,
+  //         estadoDeCuenta: estadoDeCuentaPayload ?? null,
+  //       };
+
+  //       if (isEditing) {
+  //         setIsEditing(false);
+  //         let datosActualizar = {
+  //           ...formData,
+  //           fecha: fechaISO,
+  //           incluir_iva: +formData.incluirIva,
+  //           incluir_ret: +formData.incluirRet,
+  //           factura: 0,
+  //           observacion: formData.observacion,
+  //           subtotal: Number(calculos.subtotal) || 0,
+  //           iva: Number(calculos.iva) || 0,
+  //           retencion: Number(calculos.retencion) || 0,
+  //           total: Number(calculos.total) || 0,
+  //         };
+
+  //         const usuario = localStorage.getItem("usuario") || "Desconocido";
+
+  //         let cambios = compararDatos(editingMovement, datosActualizar, usuario);
+
+  //         lineItems.forEach((item, idx) => {
+  //           cambios += compararDatos(editingItems.data[idx], item, usuario);
+  //           updateMovimientoItems(editingMovement.remision, item);
+  //         });
+
+  //         datosActualizar = {
+  //           ...datosActualizar,
+  //           observacion: datosActualizar.observacion + cambios,
+  //         };
+
+  //         await updateMovimiento(editingMovement.remision, datosActualizar);
+  //         if (estadoDeCuentaPayload) {
+  //           await updatePago(
+  //             estadoDeCuentaPayload.no_ingreso,
+  //             estadoDeCuentaPayload
+  //           );
+  //         }
+  //         if (creditoActualizarPayload) {
+  //           console.log("Créditos: ", creditoActualizarPayload);
+  //           await updateCredito(
+  //             creditoActualizarPayload.idCredito,
+  //             creditoActualizarPayload
+  //           );
+  //         }
+  //       } else {
+  //         const responseSaved = await onSave(payloadHeader, lineItems);
+  //         setFormData({
+  //           ...payloadHeader,
+  // //==========================================================================================================
+  // //==========================================================================================================
+  //           cubicaje:payloadHeader.totalCubicaje,
+
+  //           remision: responseSaved.data[0].remision,
+  //         });
+  //       }
+
+  //       // --- LÓGICA DE ÉXITO ---
+  //       setLastSavedRecord({ ...payloadHeader, materiales: lineItems });
+  //     } catch (error) {
+  //       console.error("Fallo al guardar:", error);
+  //       alert(`❌ Error al guardar: ${error.message}`);
+  //     } finally {
+  //       setIsLoading(false); // [NUEVO] IMPORTANTE: Siempre apaga el cargando, falle o funcione.
+  //     }
+  //   };
+
+  //   const handleNewRecord = () => {
+  //     const currentParts = getColombiaDateParts(); // Usar la función auxiliar
+
+  //     setFormData((prev) => ({
+  //       ...initialFormData,
+  //       remision: prev.remision,
+  //       fecha: currentParts.fecha, // Fecha Colombia
+  //       horaLlegada: currentParts.hora, // Hora Colombia
+  //     }));
+  //     setLineItems(initialLineItems);
+  //     setCalculos({ subtotal: 0, iva: 0, retencion: 0, total: 0 });
+  //     setLastSavedRecord(null);
+  //   };
+
+  //   const formatCurrency = (val) =>
+  //     new Intl.NumberFormat("es-CO", {
+  //       style: "currency",
+  //       currency: "COP",
+  //       minimumFractionDigits: 0,
+  //       maximumFractionDigits: 0,
+  //     }).format(val);
+
+  //   // Determinar qué datos usar para la vista previa: el guardado si existe, o el formulario actual
+  //   const previewData = lastSavedRecord || {
+  //     ...formData,
+  //     materiales: lineItems.map((li) => ({
+  //       ...li,
+  //       cantidad: Number(li.cantidad) || 0,
+  //       precioUnitario: Number(li.precioUnitario) || 0,
+  //     })),
+  //     ...calculos,
+  //   };
+
+  ///todo lo estetico
+
   return (
     <div className="max-w-full mx-auto p-2 md:p-4 lg:p-6">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-8 items-start">
-        
         {/* 1. MODAL DE CONFIRMACIÓN */}
         <Modal
           show={showModal}
@@ -739,7 +1124,7 @@ export default function InvoiceGenerator({
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden xl:sticky xl:top-4">
           <div className="bg-linear-to-r from-gray-50 to-white px-4 py-4 md:px-6 border-b border-gray-200 flex flex-wrap justify-between items-center gap-2">
             <h2 className="text-base md:text-lg font-bold text-gray-700 flex items-center gap-2">
-              <FileText size={18} className="text-emerald-600" /> 
+              <FileText size={18} className="text-emerald-600" />
               <span>Datos de Remisión</span>
               {lastSavedRecord && (
                 <span className="text-[10px] md:text-sm font-normal bg-blue-100 text-blue-800 px-2 py-1 rounded-full uppercase">
@@ -980,7 +1365,9 @@ export default function InvoiceGenerator({
                       onChange={(e) => setShowIVARet(e.target.checked)}
                       className="rounded text-emerald-600 w-4 h-4"
                     />
-                    <span className="text-sm text-gray-600">Mostrar IVA/Ret</span>
+                    <span className="text-sm text-gray-600">
+                      Mostrar IVA/Ret
+                    </span>
                   </label>
                 </div>
 
@@ -1005,7 +1392,28 @@ export default function InvoiceGenerator({
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
                       Tipo Pago
                     </label>
+
                     <select
+                      name="tipoPago"
+                      value={formData.tipoPago}
+                      onChange={handleChange}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
+                    >
+                      {/* Añadimos una key única para la opción por defecto */}
+                      <option key="default-selection" value="">
+                        Seleccione un tipo de pago
+                      </option>
+
+                      {paymentTypes.map((p, idx) => (
+                        <option
+                          key={p.id || `payment-${idx}`}
+                          value={p.tipo_pago || p.name}
+                        >
+                          {p.tipo_pago || p.name}
+                        </option>
+                      ))}
+                    </select>
+                    {/* <select
                       name="tipoPago"
                       value={formData.tipoPago}
                       onChange={(e) => handleChange(e)}
@@ -1019,12 +1427,12 @@ export default function InvoiceGenerator({
                           {p.tipo_pago ?? p.name ?? p.tipoPago}
                         </option>
                       ))}
-                    </select>
+                    </select> */}
                   </div>
                 </div>
 
                 {formData.tipoPago === "Pago por anticipado" && (
-                   <div className="grid grid-cols-1 gap-4">
+                  <div className="grid grid-cols-1 gap-4">
                     <div className="flex flex-col gap-1">
                       <label className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
                         No. de ingreso
@@ -1048,43 +1456,55 @@ export default function InvoiceGenerator({
 
                 {formData.tipoPago === "Pago por anticipado" &&
                   estadoDeCuenta.no_ingreso !== 0 && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-2 shadow-inner">
-                    <div className="flex items-center gap-2 mb-3 border-b border-emerald-100 pb-2">
-                      <div className="bg-emerald-500 p-1.5 rounded-lg text-white">
-                        <FileText size={16} />
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-2 shadow-inner">
+                      <div className="flex items-center gap-2 mb-3 border-b border-emerald-100 pb-2">
+                        <div className="bg-emerald-500 p-1.5 rounded-lg text-white">
+                          <FileText size={16} />
+                        </div>
+                        <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-tight">
+                          No. ingreso {estadoDeCuenta.no_ingreso}
+                        </h4>
                       </div>
-                      <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-tight">
-                        No. ingreso {estadoDeCuenta.no_ingreso}
-                      </h4>
-                    </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-sm">
-                      <div className="flex justify-between items-center">
-                        <span className="text-emerald-600 font-medium">Anticipo:</span>
-                        <span className="text-gray-700 font-mono">
-                          {formatCurrency(estadoDeCuenta.valorAnticipo)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-emerald-600 font-medium">Saldo:</span>
-                        <span className="text-gray-700 font-mono">
-                          {formatCurrency(estadoDeCuenta.saldo)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center sm:col-span-2 pt-2 border-t border-emerald-100">
-                        <span className="text-emerald-800 font-bold">Nuevo Saldo:</span>
-                        <span className={`text-base font-bold font-mono ${
-                            estadoDeCuenta.saldo - estadoDeCuenta.valorRemision < 0
-                              ? "text-red-600 animate-pulse"
-                              : "text-emerald-700"
-                          }`}
-                        >
-                          {formatCurrency(estadoDeCuenta.saldo - estadoDeCuenta.valorRemision)}
-                        </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-emerald-600 font-medium">
+                            Anticipo:
+                          </span>
+                          <span className="text-gray-700 font-mono">
+                            {formatCurrency(estadoDeCuenta.valorAnticipo)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-emerald-600 font-medium">
+                            Saldo:
+                          </span>
+                          <span className="text-gray-700 font-mono">
+                            {formatCurrency(estadoDeCuenta.saldo)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center sm:col-span-2 pt-2 border-t border-emerald-100">
+                          <span className="text-emerald-800 font-bold">
+                            Nuevo Saldo:
+                          </span>
+                          <span
+                            className={`text-base font-bold font-mono ${
+                              estadoDeCuenta.saldo -
+                                estadoDeCuenta.valorRemision <
+                              0
+                                ? "text-red-600 animate-pulse"
+                                : "text-emerald-700"
+                            }`}
+                          >
+                            {formatCurrency(
+                              estadoDeCuenta.saldo -
+                                estadoDeCuenta.valorRemision
+                            )}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 <InputGroup
                   label="Observaciones"
@@ -1108,16 +1528,34 @@ export default function InvoiceGenerator({
                 >
                   {isLoading ? (
                     <>
-                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      <svg
+                        className="animate-spin h-5 w-5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
                       </svg>
                       <span>PROCESANDO...</span>
                     </>
                   ) : (
                     <>
                       <Save size={20} />
-                      <span>{isEditing ? "GUARDAR CAMBIOS" : "GUARDAR REMISIÓN"}</span>
+                      <span>
+                        {isEditing ? "GUARDAR CAMBIOS" : "GUARDAR REMISIÓN"}
+                      </span>
                     </>
                   )}
                 </button>
@@ -1135,10 +1573,13 @@ export default function InvoiceGenerator({
             <button
               onClick={() => window.print()}
               className={`text-sm text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-md ${
-                lastSavedRecord ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-800 hover:bg-slate-700"
+                lastSavedRecord
+                  ? "bg-blue-600 hover:bg-blue-700"
+                  : "bg-slate-800 hover:bg-slate-700"
               }`}
             >
-              <Printer size={16} /> <span className="hidden sm:inline">Imprimir</span>
+              <Printer size={16} />{" "}
+              <span className="hidden sm:inline">Imprimir</span>
             </button>
           </div>
 
@@ -1149,9 +1590,15 @@ export default function InvoiceGenerator({
             >
               <div className="border-2 border-black mb-4">
                 <div className="flex items-center border-b-2 border-black bg-gray-50 p-3">
-                  <img src={LogoEmprecal} alt="Logo Emprecal" className="w-16 h-16 md:w-20 md:h-20 object-contain mr-4" />
+                  <img
+                    src={LogoEmprecal}
+                    alt="Logo Emprecal"
+                    className="w-16 h-16 md:w-20 md:h-20 object-contain mr-4"
+                  />
                   <div className="flex-1 text-center">
-                    <div className="font-bold text-lg md:text-xl">EMPRECAL S.A.S NIT. 804.002.739-1</div>
+                    <div className="font-bold text-lg md:text-xl">
+                      EMPRECAL S.A.S NIT. 804.002.739-1
+                    </div>
                     <div className="text-[10px] md:text-xs font-normal mt-1 text-gray-600">
                       Kilómetro 9 vía San Gil - Socorro | Cel. 3138880467
                     </div>
@@ -1163,25 +1610,46 @@ export default function InvoiceGenerator({
                 <div className="p-3">
                   <div className="grid grid-cols-[70px_1fr] gap-y-2">
                     <span className="font-bold">Fecha:</span>
-                    <span>{previewData.fecha.toLocaleString("es-CO", { timeZone: "America/Bogota" })}</span>
+                    <span>
+                      {previewData.fecha.toLocaleString("es-CO", {
+                        timeZone: "America/Bogota",
+                      })}
+                    </span>
                     <span className="font-bold">Señores:</span>
-                    <span className="uppercase font-medium truncate">{previewData.tercero || "................................"}</span>
+                    <span className="uppercase font-medium truncate">
+                      {previewData.tercero ||
+                        "................................"}
+                    </span>
                     <span className="font-bold">Dirección:</span>
-                    <span className="uppercase font-medium truncate">{previewData.direccion || "................................"}</span>
+                    <span className="uppercase font-medium truncate">
+                      {previewData.direccion ||
+                        "................................"}
+                    </span>
                     <span className="font-bold">Cédula:</span>
-                    <span className="uppercase font-medium">{previewData.cedula || "................................"}</span>
+                    <span className="uppercase font-medium">
+                      {previewData.cedula || "................................"}
+                    </span>
                     <span className="font-bold">Transp.:</span>
-                    <span className="uppercase font-medium truncate">{previewData.conductor || "................................"}</span>
+                    <span className="uppercase font-medium truncate">
+                      {previewData.conductor ||
+                        "................................"}
+                    </span>
                     <span className="font-bold">Llegada:</span>
-                    <span className="uppercase font-medium">{previewData.horaLlegada}</span>
+                    <span className="uppercase font-medium">
+                      {previewData.horaLlegada}
+                    </span>
                     <span className="font-bold">Salida:</span>
-                    <span className="uppercase font-medium">{previewData.horaSalida}</span>
+                    <span className="uppercase font-medium">
+                      {previewData.horaSalida}
+                    </span>
                   </div>
                 </div>
                 <div className="p-3 bg-gray-50">
                   <div className="grid grid-cols-[80px_1fr] gap-y-2 items-center">
                     <span className="font-bold text-right pr-3">REMISIÓN:</span>
-                    <span className="font-bold text-red-600 text-lg md:text-xl font-mono tracking-widest">{previewData.remision}</span>
+                    <span className="font-bold text-red-600 text-lg md:text-xl font-mono tracking-widest">
+                      {formatearRemision(previewData.remision)}
+                    </span>
                     <span className="font-bold text-right pr-3">Celular:</span>
                     <span>{previewData.telefono}</span>
                     <span className="font-bold text-right pr-3">Placa:</span>
@@ -1189,21 +1657,28 @@ export default function InvoiceGenerator({
                       {previewData.placa}
                     </span>
                     <span className="font-bold text-right pr-3">Pago:</span>
-                    <span className="text-[10px] md:text-xs uppercase">{previewData.tipoPago}</span>
+                    <span className="text-[10px] md:text-xs uppercase">
+                      {previewData.tipoPago}
+                    </span>
+
+                    <span className="font-bold text-right pr-3">Cubica:</span>
+                    <span className="text-lg md:text-xl font-black uppercase px-1">
+                      {previewData.cubica}
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Tabla de items */}
               <div className="border-x-2 border-b-2 border-black">
-                <div className="grid grid-cols-[80px_1fr_100px_100px] bg-gray-200 border-b-2 border-black font-bold text-center p-2 text-[10px] md:text-xs uppercase tracking-wider">
+                <div className="grid grid-cols-[80px_1fr_100px_100px] bg-gray-200 border-b-2 border-black font-bold text-center p-1 text-[10px] text-sm uppercase tracking-wider">
                   <div>Cantidad</div>
                   <div>Descripción</div>
                   <div>Precio Unit.</div>
                   <div>Total</div>
                 </div>
 
-                <div className="min-h-[150px]">
+                <div className="min-h-[60px]">
                   {previewData.materiales.map((li, i) => {
                     const cantidad = Number(li.cantidad) || 0;
                     const precio = Number(li.precioUnitario) || 0;
@@ -1211,52 +1686,83 @@ export default function InvoiceGenerator({
                     if (lastSavedRecord && cantidad === 0) return null;
 
                     return (
-                      <div key={`${li.id || i}-preview`} className="grid grid-cols-[80px_1fr_100px_100px] text-center p-1 border-b border-gray-100 last:border-0">
-                        <div className="py-2 font-medium">{cantidad > 0 ? cantidad : ""}</div>
-                        <div className="py-2 uppercase text-left px-4 font-medium truncate">{li.nombre_material || ""}</div>
-                        <div className="py-2 text-gray-600 font-mono">{precio > 0 ? formatCurrency(precio) : ""}</div>
-                        <div className="py-2 font-medium font-mono">{total > 0 ? formatCurrency(total) : ""}</div>
+                      <div
+                        key={`${li.id || i}-preview`}
+                        className="grid grid-cols-[80px_1fr_100px_100px] text-center p-0.5 border-b border-gray-100 last:border-0 text-sm"
+                      >
+                        <div className="py-0.5 font-medium">
+                          {cantidad > 0 ? cantidad : ""}
+                        </div>
+                        <div className="py-0.5 uppercase text-left px-4 font-medium truncate">
+                          {li.nombre_material || ""}
+                        </div>
+                        <div className="py-0.5 text-gray-600 font-mono">
+                          {precio > 0 ? formatCurrency(precio) : ""}
+                        </div>
+                        <div className="py-0.5 font-medium font-mono">
+                          {total > 0 ? formatCurrency(total) : ""}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
 
-                <div className="border-t-2 border-black">
+                <div className="border-t-2 border-black text-sm">
                   <div className="grid grid-cols-[1fr_120px]">
-                    <div className="text-right pr-3 font-bold py-1 border-r-2 border-black bg-gray-50">SUBTOTAL:</div>
-                    <div className="text-right pr-3 py-1 font-mono">{formatCurrency(previewData.subtotal)}</div>
+                    <div className="text-right pr-3 font-bold py-0.5 border-r-2 border-black bg-gray-50">
+                      SUBTOTAL:
+                    </div>
+                    <div className="text-right pr-3 py-0.5 font-mono">
+                      {formatCurrency(previewData.subtotal)}
+                    </div>
                   </div>
 
                   {showIVARet && previewData.incluirIva && (
-                    <div className="grid grid-cols-[1fr_120px] border-t border-black">
-                      <div className="text-right pr-3 font-bold py-1 border-r-2 border-black bg-gray-50">IVA (19%):</div>
-                      <div className="text-right pr-3 py-1 font-mono">{formatCurrency(previewData.iva)}</div>
+                    <div className="grid grid-cols-[1fr_120px] border-t border-black text-sm">
+                      <div className="text-right pr-3 font-bold py-0.5 border-r-2 border-black bg-gray-50">
+                        IVA (19%):
+                      </div>
+                      <div className="text-right pr-3 py-0.5 font-mono">
+                        {formatCurrency(previewData.iva)}
+                      </div>
                     </div>
                   )}
 
                   {showIVARet && previewData.incluirRet && (
-                    <div className="grid grid-cols-[1fr_120px] border-t border-black">
-                      <div className="text-right pr-3 font-bold py-1 border-r-2 border-black bg-gray-50">RETENCIÓN:</div>
-                      <div className="text-right pr-3 py-1 font-mono">{formatCurrency(previewData.retencion)}</div>
+                    <div className="grid grid-cols-[1fr_120px] border-t border-black text-sm">
+                      <div className="text-right pr-3 font-bold py-0.5 border-r-2 border-black bg-gray-50">
+                        RETENCIÓN:
+                      </div>
+                      <div className="text-right pr-3 py-0.5 font-mono">
+                        {formatCurrency(previewData.retencion)}
+                      </div>
                     </div>
                   )}
 
                   <div className="grid grid-cols-[1fr_120px] border-t-2 border-black bg-gray-200">
-                    <div className="text-right pr-3 font-bold py-2 border-r-2 border-black text-sm md:text-base">TOTAL A PAGAR:</div>
-                    <div className="text-right pr-3 py-2 font-bold text-sm md:text-base font-mono">
-                      {showIVARet ? formatCurrency(previewData.total) : formatCurrency(previewData.subtotal)}
+                    <div className="text-right pr-3 font-bold py-2 border-r-2 border-black text-base">
+                      TOTAL A PAGAR:
+                    </div>
+                    <div className="text-right pr-3 py-1 font-bold text-base font-mono">
+                      {showIVARet
+                        ? formatCurrency(previewData.total)
+                        : formatCurrency(previewData.subtotal)}
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="border-2 border-black p-3 min-h-[60px] rounded-sm my-4">
-                <span className="font-bold block text-[10px] uppercase text-gray-500">Obs:</span>
+                <span className="font-bold block text-[10px] uppercase text-gray-500">
+                  Obs:
+                </span>
                 <span className="italic">{previewData.observacion}</span>
               </div>
 
               <div className="w-full mt-12 flex items-center gap-4 max-w-[400px]">
-                <p className="font-bold uppercase tracking-wide whitespace-nowrap text-xs">Firma tercero:</p>
+                <p className="font-bold uppercase tracking-wide whitespace-nowrap text-xs">
+                  Firma tercero:
+                </p>
                 <div className="flex-1 border-t-2 border-black"></div>
               </div>
             </div>
@@ -1267,7 +1773,7 @@ export default function InvoiceGenerator({
   );
 }
 
-  ////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
 
 //   return (
 //     <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
@@ -1747,14 +2253,6 @@ export default function InvoiceGenerator({
 //           )}
 //         </div>
 //       </div>
-
-
-
-
-
-
-
-
 
 //       {/* VISTA PREVIA */}
 //       <div className="flex flex-col gap-4">

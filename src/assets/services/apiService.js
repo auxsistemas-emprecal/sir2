@@ -1,8 +1,12 @@
 // Importa token
 import { getToken } from "./authService";
+// true = modo edicion
+// false = modo real 
+const isDev = false;
 
-const BASE_URL =
-  "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev";
+const BASE_URL = !isDev
+  ? "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev"
+  : "http://192.168.150.33:8000";
 
 // Headers con token
 // Headers con token con log de depuración
@@ -238,7 +242,7 @@ export const updateMovimientoStatus = async (remision, newState) => {
 
     //SOBRESCRIBIR EL ESTADO
     estado: newState,
-    usuario: movimientoActual.usuario
+    usuario: movimientoActual.usuario,
   };
 
   //Enviar la actualización PUT al endpoint seguro /movimientos/{remision}.
@@ -312,19 +316,27 @@ export const updateMovimientoItems = async (remision, items) => {
   });
   return await res.json();
 };
-
 /* ============================================================
-   🟩 TERCEROS
+   🟩 TERCEROS - CORREGIDO
    ============================================================ */
+
+// Función auxiliar para manejar errores de respuesta
+const handleResponse = async (res) => {
+  const json = await res.json();
+  if (!res.ok) {
+    // Esto te dirá exactamente qué rechazó la base de datos (ej: error de tipos)
+    throw new Error(json.message || "Error en la petición");
+  }
+  return json;
+};
 
 export const fetchTerceros = async () => {
   try {
     const response = await fetch(`${BASE_URL}/terceros`, {
       headers: getAuthHeaders(),
     });
-
     const json = await response.json();
-    return Array.isArray(json.data) ? json.data : [];
+    return Array.isArray(json.data) ? json.data : (json || []);
   } catch (error) {
     console.error("Error obteniendo terceros:", error);
     return [];
@@ -332,21 +344,69 @@ export const fetchTerceros = async () => {
 };
 
 export const createTercero = async (tercero) => {
-  const res = await fetch(`${BASE_URL}/terceros`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify(tercero),
-  });
-  return await res.json();
+  try {
+    const res = await fetch(`${BASE_URL}/terceros`, {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(tercero),
+    });
+    return await handleResponse(res);
+  } catch (error) {
+    console.error("Error creando tercero:", error);
+    throw error;
+  }
 };
 
+// export const updateTercero = async (id, tercero) => {
+//   try {
+//     // 1. Limpieza de datos antes de enviar
+//     const dataAEnviar = {
+//       ...tercero,
+//       // Convertimos a Number para asegurar el tipo int(7) de la DB
+//       id_tercero: Number(id), 
+//       // Convertimos null a "" y quitamos espacios para no exceder varchar(20)
+//       telefono: tercero.telefono ? String(tercero.telefono).trim() : "" 
+//     };
+
+//     const res = await fetch(`${BASE_URL}/terceros`, {
+//       method: "PUT",
+//       headers: {
+//         ...getAuthHeaders(),
+//         "Content-Type": "application/json",
+//       },
+//       body: JSON.stringify(dataAEnviar),
+//     });
+
+//     return await handleResponse(res);
+//   } catch (error) {
+//     console.error("Error detallado en updateTercero:", error);
+//     throw error;
+//   }
+// };
 export const updateTercero = async (id, tercero) => {
-  const res = await fetch(`${BASE_URL}/terceros/${id}`, {
-    method: "PUT",
-    headers: getAuthHeaders(),
-    body: JSON.stringify(tercero),
-  });
-  return await res.json();
+  try {
+    // IMPORTANTE: Quitamos el /${id} de la URL porque tu API usa la ruta base para PUT
+    const res = await fetch(`${BASE_URL}/terceros`, {
+      method: "PUT",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      // El ID ya va aquí dentro según tu imagen de Swagger
+      body: JSON.stringify({
+        ...tercero,
+        id_tercero: Number(id) 
+      }),
+    });
+
+    return await handleResponse(res);
+  } catch (error) {
+    console.error("Error detallado en updateTercero:", error);
+    throw error;
+  }
 };
 
 export const searchTercero = async (query = "") => {
@@ -354,14 +414,62 @@ export const searchTercero = async (query = "") => {
     const response = await fetch(`${BASE_URL}/terceros/${query}`, {
       headers: getAuthHeaders(),
     });
-
     const json = await response.json();
     return Array.isArray(json.data) ? json.data : [];
   } catch (error) {
-    console.error("Error obteniendo terceros:", error);
+    console.error("Error buscando terceros:", error);
     return [];
   }
 };
+// /* ============================================================
+//    🟩 TERCEROS
+//    ============================================================ */
+
+// export const fetchTerceros = async () => {
+//   try {
+//     const response = await fetch(`${BASE_URL}/terceros`, {
+//       headers: getAuthHeaders(),
+//     });
+
+//     const json = await response.json();
+//     return Array.isArray(json.data) ? json.data : [];
+//   } catch (error) {
+//     console.error("Error obteniendo terceros:", error);
+//     return [];
+//   }
+// };
+
+// export const createTercero = async (tercero) => {
+//   const res = await fetch(`${BASE_URL}/terceros`, {
+//     method: "POST",
+//     headers: getAuthHeaders(),
+//     body: JSON.stringify(tercero),
+//   });
+//   return await res.json();
+// };
+
+// export const updateTercero = async (id, tercero) => {
+//   const res = await fetch(`${BASE_URL}/terceros/${id}`, {
+//     method: "PUT",
+//     headers: getAuthHeaders(),
+//     body: JSON.stringify(tercero),
+//   });
+//   return await res.json();
+// };
+
+// export const searchTercero = async (query = "") => {
+//   try {
+//     const response = await fetch(`${BASE_URL}/terceros/${query}`, {
+//       headers: getAuthHeaders(),
+//     });
+
+//     const json = await response.json();
+//     return Array.isArray(json.data) ? json.data : [];
+//   } catch (error) {
+//     console.error("Error obteniendo terceros:", error);
+//     return [];
+//   }
+// };
 
 /* ============================================================
    PRECIOS ESPECIALES
@@ -375,6 +483,22 @@ export const fetchPreciosEspeciales = async () => {
     return Array.isArray(json.data) ? json.data : [];
   } catch (error) {
     console.log("Error obteniendo los precios espciales: ", error);
+    return [];
+  }
+};
+
+export const fetchPreciosEspecialesPorTercero = async (nombreTercero) => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/preciosEspeciales/precioEspecialPorTercero/${nombreTercero}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    const json = await response.json();
+    return Array.isArray(json.data) ? json.data : [];
+  } catch (error) {
+    console.log("Error obteniendo los precios especiales: ", error);
     return [];
   }
 };
@@ -870,7 +994,7 @@ export const createGasto = async (gasto) => {
 };
 
 // ====================================================================
-// ********************CUADRE CAJA*****************************+******* 
+// ********************CUADRE CAJA*****************************+*******
 // ====================================================================
 
 // ====================================================================
@@ -893,10 +1017,10 @@ export const fetchGastosPorFecha = async (fecha) => {
 };
 
 // ====================================================================
-// 📊 Elimina Registro de Gastos 
+// 📊 Elimina Registro de Gastos
 // ====================================================================
 
-  export const deleteGastoDiario = async (id) => {
+export const deleteGastoDiario = async (id) => {
   try {
     const res = await fetch(`${BASE_URL}/gastos_diarios/${id}`, {
       method: "DELETE",
@@ -910,22 +1034,6 @@ export const fetchGastosPorFecha = async (fecha) => {
     throw e;
   }
 };
-
-// export const deleteGastoDiario = async (id) => {
-//   try {
-//     const response = await fetch(`${BASE_URL}/gastos_diarios/${id}`, {
-//       method: "DELETE",
-//       headers: getAuthHeaders(),
-//     });
-//     if (!response.ok) {
-//       throw new Error("No se pudo eliminar el gasto de la base de datos");
-//     }
-//     return true;
-//   } catch (error) {
-//     console.error("Error eliminando gasto:", error);
-//     return false;
-//   }
-// };
 // ====================================================================
 // 📊 CUADRE DE CAJA (PERSISTENCIA)
 // ====================================================================
@@ -1054,6 +1162,47 @@ export const createCuadreDiario = async (arqueo) => {
 };
 
 // ====================================================================
+// 🟦 VISUALIZACION DE CUADRE CAJA EN UTILIDADES 
+// ====================================================================
+
+  // En apiService.js
+  // export const fetchCuadresCaja = async (inicio, fin) => {
+  //   try {
+  //     const url = `${BASE_URL}/cuadreDiario?fecha_inicio=${inicio}&fecha_fin=${fin}`;
+  //     const response = await fetch(url, { headers: getAuthHeaders() });
+  //     if (!response.ok) throw new Error("Error al obtener históricos de caja");
+  //     const json = await response.json();
+  //     return json.data ?? [];
+  //   } catch (e) {
+  //     console.error("Error fetchCuadresCaja:", e);
+  //     return [];
+  //   }
+  // };
+
+  // En apiService.js
+
+export const fetchCuadresCaja = async (fecha) => {
+  try {
+    // Si no hay fecha, no hacemos la consulta o enviamos vacío
+    if (!fecha) return [];
+
+    // Cambiamos el parámetro a 'fecha_busqueda' como pide tu endpoint
+    const url = `${BASE_URL}/cuadre_caja_view?fecha_busqueda=${fecha}`;
+    
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    const json = await response.json();
+
+    if (json.status === "success" && Array.isArray(json.data)) {
+      return json.data;
+    }
+    return [];
+  } catch (e) {
+    console.error("Error fetchCuadresCaja:", e);
+    return [];
+  }
+};
+
+// ====================================================================
 // 🟦 CONTABILIDAD / FACTURACIÓN
 // ====================================================================
 
@@ -1117,7 +1266,6 @@ export const createRegistroFactura = async (datosFactura) => {
 // ====================================================================
 // 🟦 Reporte de compras
 // ====================================================================
-
 
 export const fetchTotalMaterialPorTercero = async (tercero, inicio, fin) => {
   try {
@@ -1196,6 +1344,34 @@ export const fetchItemsPorRemision = async (numRemision) => {
     return json.data ?? [];
   } catch (e) {
     console.error("Error items remisión:", e);
+    return [];
+  }
+};
+
+// ====================================================================
+// 🟦 Estadísticas de Ventas (Dashboard)
+// ====================================================================
+
+export const fetchVentasPorFecha = async (inicio, fin) => {
+  try {
+    // 1. Construcción de URL usando la BASE_URL y parámetros de fecha
+    const url = `${BASE_URL}/vistaMovimientos/ventasPorFecha?fecha_inicio=${inicio}&fecha_fin=${fin}`;
+
+    // 2. Petición usando tus encabezados de autenticación globales
+    const response = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+
+    // 3. Validación de respuesta HTTP
+    if (!response.ok) throw new Error("Error en la petición de estadísticas");
+
+    // 4. Parseo y validación del formato de respuesta de tu API
+    const json = await response.json();
+
+    // Retorna los datos si el status es success, de lo contrario un array vacío
+    return json.status === "success" ? json.data : [];
+  } catch (error) {
+    console.error("Error estadisticas:", error);
     return [];
   }
 };

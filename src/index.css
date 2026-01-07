@@ -62,13 +62,14 @@
     left: 50% !important;
     width: 100% !important;
     max-width: 21.59cm !important;
-    min-height: 14cm !important;
+    min-height: 13.5cm !important;
     background: #ffffff !important;
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
     transform-origin: top center !important;
-    transform: translateX(-50%) scale(0.78) !important;
+    transform: translateX(-50%) scale(0.9) !important;
+    font-size: 14px !important;
   }
 
   @page {

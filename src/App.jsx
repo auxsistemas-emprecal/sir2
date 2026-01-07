@@ -19,6 +19,7 @@ import InvoiceGenerator from "./components/InvoiceGenerator.jsx";
 import ConfigurationPanel from "./components/ConfigurationPanel.jsx";
 import Terceros from "./components/terceros.jsx";
 import PreciosEspeciales from "./components/PreciosEspeciales.jsx";
+import Utilidades from "./components/Utilidades.jsx";
 import AnticipoRegister from "./components/AnticipoRegister.jsx";
 import HistorialAnticipos from "./components/HistorialAnticipos.jsx";
 import AuthForm from "./components/AuthForm.jsx";
@@ -28,6 +29,8 @@ import CreditosTable from "./components/CreditosTable.jsx";
 import ReporteCompras from "./components/ReporteCompras.jsx";
 import Contabilidad from "./components/Contabilidad.jsx";
 import Inicio from "./components/Inicio.jsx";
+import CuadreRevision from "./components/CuadreRevision.jsx";
+import CuadreCajaDetalles from "./components/CuadreCajaDetalles.jsx";
 
 // Servicios
 import { getToken, logoutUser } from "./assets/services/authService.js";
@@ -54,6 +57,7 @@ import {
   createCredito,
   updateCredito,
   fetchTotalMaterialPorTercero,
+  fetchVentasPorFecha,
 } from "./assets/services/apiService.js";
 
 export default function App() {
@@ -68,6 +72,8 @@ export default function App() {
   const [terceros, setTerceros] = useState([]);
   const [reloadAnticipos, setReloadAnticipos] = useState(0);
   const [creditos, setCreditos] = useState([]);
+  // Dentro de tu función App
+  const [cuadreSeleccionado, setCuadreSeleccionado] = useState(null);
 
   // 🆕 ESTADO PARA ESTADÍSTICAS DE INICIO
   const [stats, setStats] = useState({
@@ -527,6 +533,8 @@ export default function App() {
             />
           )}
 
+          {/* {activeTab === "utilidades" && <Utilidades />} */}
+
           {activeTab === "anticipo" && (
             <AnticipoRegister
               terceros={terceros}
@@ -574,6 +582,10 @@ export default function App() {
             />
           )}
 
+          {activeTab === "utilidades" && (
+            <Utilidades setActiveTab={setActiveTab} />
+          )}
+
           {activeTab === "terceros" && (
             <Terceros data={terceros} setData={setTerceros} />
           )}
@@ -590,6 +602,21 @@ export default function App() {
           )}
 
           {activeTab === "PreciosEspeciales" && <PreciosEspeciales />}
+
+          {activeTab === "CuadreRevision" && (
+            <CuadreRevision onVerDetalle={(cuadre) => {
+                setCuadreSeleccionado(cuadre);
+                setActiveTab("CuadreCajaDetalles");
+            }} />
+          )}
+
+          {activeTab === "CuadreCajaDetalles" && (
+            <CuadreCajaDetalles 
+              datos={cuadreSeleccionado} 
+              onBack={() => setActiveTab("CuadreRevision")} 
+            />
+          )}
+
         </div>
       </main>
     </div>
