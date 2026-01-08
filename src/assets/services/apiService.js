@@ -1190,7 +1190,7 @@ export const fetchCuadresCaja = async (fecha) => {
 export const fetchGastosDetalleHistorico = async (fecha, timesnap) => {
   try {
     // Usamos encodeURIComponent para que los espacios y símbolos de la fecha no rompan la URL
-    const url = `http://192.168.150.5:8000/cuadre_caja_view/corte-temporal?fecha_busqueda=${fecha}&timesnap=${encodeURIComponent(timesnap)}`;
+    const url = `${BASE_URL}/cuadre_caja_view/corte-temporal?fecha_busqueda=${fecha}&timesnap=${encodeURIComponent(timesnap)}`;
     
     const response = await fetch(url, { 
       method: 'GET',
