@@ -22,6 +22,8 @@ export default function CuadreRevision({ onVerDetalle }) {
     try {
       // Enviamos el parámetro único que espera el backend
       const data = await fetchCuadresCaja(fechaFiltro);
+      console.log(data);
+      
       setCuadres(data);
     } catch (error) {
       console.error("Error al consultar:", error);

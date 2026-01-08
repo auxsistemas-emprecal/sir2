@@ -6,7 +6,7 @@ const isDev = false;
 
 const BASE_URL = !isDev
   ? "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev"
-  : "http://192.168.150.33:8000";
+  : "http://192.168.150.5:8000";
 
 // Headers con token
 // Headers con token con log de depuración
@@ -1165,22 +1165,6 @@ export const createCuadreDiario = async (arqueo) => {
 // 🟦 VISUALIZACION DE CUADRE CAJA EN UTILIDADES 
 // ====================================================================
 
-  // En apiService.js
-  // export const fetchCuadresCaja = async (inicio, fin) => {
-  //   try {
-  //     const url = `${BASE_URL}/cuadreDiario?fecha_inicio=${inicio}&fecha_fin=${fin}`;
-  //     const response = await fetch(url, { headers: getAuthHeaders() });
-  //     if (!response.ok) throw new Error("Error al obtener históricos de caja");
-  //     const json = await response.json();
-  //     return json.data ?? [];
-  //   } catch (e) {
-  //     console.error("Error fetchCuadresCaja:", e);
-  //     return [];
-  //   }
-  // };
-
-  // En apiService.js
-
 export const fetchCuadresCaja = async (fecha) => {
   try {
     // Si no hay fecha, no hacemos la consulta o enviamos vacío
@@ -1198,6 +1182,29 @@ export const fetchCuadresCaja = async (fecha) => {
     return [];
   } catch (e) {
     console.error("Error fetchCuadresCaja:", e);
+    return [];
+  }
+};
+
+// En apiService.js
+export const fetchGastosDetalleHistorico = async (fecha, timesnap) => {
+  try {
+    // Usamos encodeURIComponent para que los espacios y símbolos de la fecha no rompan la URL
+    const url = `http://192.168.150.5:8000/cuadre_caja_view/corte-temporal?fecha_busqueda=${fecha}&timesnap=${encodeURIComponent(timesnap)}`;
+    
+    const response = await fetch(url, { 
+      method: 'GET',
+      headers: getAuthHeaders() // <--- ESTA ES LA CLAVE
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error HTTP: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result.status === "success" ? result.data : [];
+  } catch (error) {
+    console.error("Error al traer detalles de gastos:", error);
     return [];
   }
 };

@@ -284,7 +284,7 @@ export default function App() {
 
       console.log(headerData);
 
-      if (headerData.idTipoPago === 1 || headerData.idTipoPago === 2) {
+      if (headerData.idTipoPago === 1 || headerData.idTipoPago === 2 || headerData.idTipoPago === 9) {
         headerData.pagado = 1;
       }
       await createMovimiento(headerData);
