@@ -2,7 +2,7 @@
 import { getToken } from "./authService";
 // true = modo edicion
 // false = modo real 
-const isDev = false;
+const isDev = true;
 
 const BASE_URL = !isDev
   ? "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev"
@@ -1382,3 +1382,47 @@ export const fetchVentasPorFecha = async (inicio, fin) => {
     return [];
   }
 };
+
+//====================================================================================
+// 🧮------------------ movimientoItems/cubicaje-material?fecha ----------------------
+//====================================================================================
+
+export const fetchCubicajePorMaterial = async (inicio, fin) => {
+  try {
+    // Enviamos las fechas tal cual vienen del input date (2026-01-09 23:59:59)  YYYY-MM-DD HH:mm:ss
+    const url = `${BASE_URL}/movimientoItems/cubicaje-material?fecha_inicio=${encodeURIComponent(inicio)}&fecha_fin=${encodeURIComponent(fin)}`;
+
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    
+    if (!response.ok) throw new Error("Error al obtener cubicaje");
+
+    const json = await response.json();
+    
+    //  la respuesta tiene esta estructura: { status: "success", data: [...] }
+    return json.data || [];
+  } catch (error) {
+    console.error("Error en fetchCubicajePorMaterial:", error);
+    return [];
+  }
+};
+
+
+// ====================================================================
+// 🟦 NOTIICACIONES EN EL INICIO 
+// ====================================================================
+
+  export const fetchNotificaciones = async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/notificaciones`, {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) throw new Error("Error al obtener notificaciones");
+      const json = await response.json();
+      return json.status === "success" ? json.data : [];
+    } catch (error) {
+      console.error("Error notificaciones:", error);
+      return [];
+    }
+  };
+
+  

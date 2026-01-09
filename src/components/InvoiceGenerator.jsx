@@ -88,7 +88,7 @@ export default function InvoiceGenerator({
   setIsEditing,
   usuario,
   setActiveTab,
-  // isSaving,
+  // isSaving,  
 }) {
   const [nextRemisionNumber, setNextRemisionNumber] = useState(null);
 
@@ -500,7 +500,7 @@ export default function InvoiceGenerator({
               const nombreMaterialSelected = selected.nombre_material;
               let materialPE = [];
               if (preciosEspeciales.length > 0) {
-                comaterialPE = preciosEspeciales.filter(
+                materialPE = preciosEspeciales.filter(
                   (el) => el.nombre_material === nombreMaterialSelected
                 );
                 setMaterials((prevMaterials) => {
@@ -883,6 +883,9 @@ export default function InvoiceGenerator({
           cubica: totalCubicaje,
           remision: responseSaved.data[0].remision,
         });
+        // Recargar estado de materiales
+        const materialesActualizados = await fetchMateriales();
+        setMaterials(materialesActualizados);
       }
 
       setLastSavedRecord({
