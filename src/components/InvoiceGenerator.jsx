@@ -1568,11 +1568,12 @@ export default function InvoiceGenerator({
         </div>
 
         {/* VISTA PREVIA */}
-        <div className="flex flex-col gap-4 overflow-hidden">
+        {/* <div className="flex flex-col gap-4 overflow-hidden">
           <div className="flex justify-between items-center px-1">
             <h3 className="font-bold text-gray-600 flex items-center gap-2">
               <Printer size={18} /> Vista Previa
             </h3>
+            
             <button
               onClick={() => window.print()}
               className={`text-sm text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-md ${
@@ -1584,7 +1585,29 @@ export default function InvoiceGenerator({
               <Printer size={16} />{" "}
               <span className="hidden sm:inline">Imprimir</span>
             </button>
-          </div>
+          </div> */}
+          {/* VISTA PREVIA */}
+          <div className="flex flex-col gap-4 overflow-hidden">
+            <div className="flex justify-between items-center px-1">
+              <h3 className="font-bold text-gray-600 flex items-center gap-2">
+                <Printer size={18} /> Vista Previa
+              </h3>
+
+              {/* AQUÍ APLICAMOS EL CAMBIO */}
+              {lastSavedRecord && (
+                <button
+                  onClick={() => window.print()}
+                  className={`text-sm text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-md ${
+                    lastSavedRecord
+                      ? "bg-blue-600 hover:bg-blue-700"
+                      : "bg-slate-800 hover:bg-slate-700"
+                  }`}
+                >
+                  <Printer size={16} />{" "}
+                  <span className="hidden sm:inline">Imprimir</span>
+                </button>
+              )}
+            </div>
 
           <div className="bg-gray-100 p-2 md:p-4 rounded-xl border border-gray-200 overflow-x-auto">
             <div
@@ -1611,7 +1634,7 @@ export default function InvoiceGenerator({
 
               <div className="grid grid-cols-2 divide-x-2 divide-black border-x-2 border-b-2 border-black">
                 <div className="p-3">
-                  <div className="grid grid-cols-[70px_1fr] gap-y-2">
+                  <div className="grid grid-cols-[70px_1fr] gap-y-2 text-sm md:text-base">
                     <span className="font-bold">Fecha:</span>
                     <span>
                       {previewData.fecha.toLocaleString("es-CO", {
@@ -1623,7 +1646,7 @@ export default function InvoiceGenerator({
                       {previewData.tercero ||
                         "................................"}
                     </span>
-                    <span className="font-bold">Dirección:</span>
+                    <span className="font-bold">Direcc:</span>
                     <span className="uppercase font-medium truncate">
                       {previewData.direccion ||
                         "................................"}
@@ -1632,7 +1655,7 @@ export default function InvoiceGenerator({
                     <span className="uppercase font-medium">
                       {previewData.cedula || "................................"}
                     </span>
-                    <span className="font-bold">Transp.:</span>
+                    <span className="font-bold">Transp:</span>
                     <span className="uppercase font-medium truncate">
                       {previewData.conductor ||
                         "................................"}
@@ -1648,23 +1671,23 @@ export default function InvoiceGenerator({
                   </div>
                 </div>
                 <div className="p-3 bg-gray-50">
-                  <div className="grid grid-cols-[80px_1fr] gap-y-2 items-center">
+                  <div className="grid grid-cols-[80px_1fr] gap-y-2 items-center ">
                     <span className="font-bold text-right pr-3">REMISIÓN:</span>
                     <span className="font-bold text-red-600 text-lg md:text-xl font-mono tracking-widest">
                       {formatearRemision(previewData.remision)}
                     </span>
-                    <span className="font-bold text-right pr-3">Celular:</span>
+                    <span className="font-bold text-right pr-3 text-sm md:text-base">Celular:</span>
                     <span>{previewData.telefono}</span>
-                    <span className="font-bold text-right pr-3">Placa:</span>
+                    <span className="font-bold text-right pr-3 text-sm md:text-base">Placa:</span>
                     <span className="uppercase border-2 border-black px-2 py-0.5 inline-block text-center font-bold w-24 bg-white">
                       {previewData.placa}
                     </span>
-                    <span className="font-bold text-right pr-3">Pago:</span>
+                    <span className="font-bold text-right pr-3 text-sm md:text-base ">Pago:</span>
                     <span className="text-[10px] md:text-xs uppercase">
                       {previewData.tipoPago}
                     </span>
 
-                    <span className="font-bold text-right pr-3">Cubica:</span>
+                    <span className="font-bold text-right pr-3 text-sm md:text-base">Cubica:</span>
                     <span className="text-lg md:text-xl font-black uppercase px-1">
                       {previewData.cubica}
                     </span>
@@ -1691,7 +1714,7 @@ export default function InvoiceGenerator({
                     return (
                       <div
                         key={`${li.id || i}-preview`}
-                        className="grid grid-cols-[80px_1fr_100px_100px] text-center p-0.5 border-b border-gray-100 last:border-0 text-sm"
+                        className="grid grid-cols-[80px_1fr_100px_100px] text-center p-0.5 border-b border-gray-100 last:border-0 text-base"
                       >
                         <div className="py-0.5 font-medium">
                           {cantidad > 0 ? cantidad : ""}
@@ -2459,3 +2482,4 @@ export default function InvoiceGenerator({
 //     </div>
 //   );
 // }
+// 

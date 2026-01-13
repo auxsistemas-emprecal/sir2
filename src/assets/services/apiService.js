@@ -2,7 +2,7 @@
 import { getToken } from "./authService";
 // true = modo edicion
 // false = modo real 
-const isDev = true;
+const isDev = false;
 
 const BASE_URL = !isDev
   ? "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev"
