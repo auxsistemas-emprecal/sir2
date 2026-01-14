@@ -88,7 +88,7 @@ export default function InvoiceGenerator({
   setIsEditing,
   usuario,
   setActiveTab,
-  // isSaving,  
+  // isSaving,
 }) {
   const [nextRemisionNumber, setNextRemisionNumber] = useState(null);
 
@@ -149,6 +149,12 @@ export default function InvoiceGenerator({
     observacion: "",
     horaLlegada: initialDateParts.hora,
     horaSalida: "",
+    // --- NUEVOS CAMPOS DE PESAJE ---
+    usarPesaje: false,
+    pesoEntrada: 0,
+    pesoSalida: 0,
+    pesoNeto: 0,
+    imprimirPesaje: false,
   };
 
   const initialLineItems = () => {
@@ -202,8 +208,28 @@ export default function InvoiceGenerator({
   const [preciosEspeciales, setPreciosEspeciales] = useState([]);
   const [pagosAnticipados, setPagosAnticipados] = useState([]);
   // ----------------------------------------------------------------------
-  //-----------------------------------------------------------------------
   const [isLoading, setIsLoading] = useState(false);
+
+  // FUNCIÓN DE MANEJO DE PESAJE
+  const handlePesoChange = (e) => {
+    const { name, value } = e.target;
+    // Convertimos el valor a número (si está vacío, usamos 0)
+    const numValue = value === "" ? 0 : parseFloat(value);
+
+    setFormData((prev) => {
+      // Creamos el nuevo estado con el valor del input que cambió
+      const nuevoEstado = { ...prev, [name]: numValue };
+
+      // Cálculo automático del Neto (Salida - Entrada)
+      // Math.max asegura que si la entrada es mayor a la salida, el neto sea 0 y no un número negativo
+      nuevoEstado.pesoNeto = Math.max(
+        0,
+        nuevoEstado.pesoSalida - nuevoEstado.pesoEntrada
+      );
+
+      return nuevoEstado;
+    });
+  };
   //=====================================================================================
   //                                EDITAR
   //======================================================================================
@@ -255,9 +281,16 @@ export default function InvoiceGenerator({
             tipoPago: editingMovement.tipo_pago,
             cubica: cubicajeRecuperado,
 
+            pesoEntrada: Number(editingMovement.pesoEntrada) || 0,
+            pesoSalida: Number(editingMovement.pesoSalida) || 0,
+            pesoNeto: Number(editingMovement.pesoNeto) || 0,
+
+            usarPesaje:
+              Number(editingMovement.pesoEntrada) > 0 ||
+              Number(editingMovement.pesoSalida) > 0,
             // Si tiene un campo 'date', asegúrese de que el formato sea el correcto para el input.
           };
-          console.log(toReturn);
+          console.log(editingMovement);
           return toReturn;
         });
         fetchPagosPorNombre(editingMovement.tercero).then((resp) => {
@@ -437,23 +470,7 @@ export default function InvoiceGenerator({
       }));
       return;
     }
-    // 2. Lógica para Tipo de Pago
-    // if (name === "tipoPago") {
-    //   if (isEditing) return;
-    //   // Buscar el ID en la lista de tipos de pago
-    //   const selectedPayment = paymentTypes.find(
-    //     (p) => (p.tipo_pago || p.name) === value
-    //   );
 
-    //   setFormData((prev) => ({
-    //     ...prev,
-    //     tipoPago: value,
-    //     // CORRECCIÓN AQUÍ: Usar el ID del pago encontrado
-    //     idTipoPago: selectedPayment?.idTipoPago || selectedPayment?.id || null,
-    //   }));
-    //   // Manejo de pagos anticipados de ese tercero
-    //   return;
-    // }
 
     // Lógica si es pago anticipado
     if (name === "no_ingreso") {
@@ -561,96 +578,6 @@ export default function InvoiceGenerator({
     );
   };
 
-  // const handleLineChange = (index, field, value) => {
-  //   setLineItems((prev) =>
-  //     prev.map((li, i) => {
-  //       if (i !== index) return li;
-
-  //       if (field === "idMaterial" || field === "nombre_material") {
-  //         let selected = materials.find(m =>
-  //           field === "idMaterial" ? Number(m.idMaterial) === Number(value) : m.nombre_material === value
-  //         );
-
-  //         if (selected) {
-  //           // 1. Nombre que el usuario seleccionó en la remisión (ej: "CONCREMOVIL")
-  //           const nombreActualRemision = (formData.tercero || "").toString().trim().toUpperCase();
-  //           const idMaterialSeleccionado = Number(selected.idMaterial);
-
-  //           /* 2. BÚSQUEDA DINÁMICA:
-  //              No usamos IDs fijos. Buscamos en preciosEspeciales si hay un registro
-  //              donde el nombre del tercero sea igual al nombre actual.
-  //           */
-  //           const tarifaEspecial = preciosEspeciales.find((pe) => {
-  //             // Buscamos el nombre del tercero asociado a este precio especial.
-  //             // Nota: He usado 'owners' porque es común, pero si tu variable
-  //             // de la lista de terceros tiene otro nombre, cámbialo aquí abajo.
-  //             const terceroRelacionado = (typeof owners !== 'undefined' ? owners : []).find(o => Number(o.id) === Number(pe.id_tercero));
-
-  //             // Si el nombre del dueño de la tarifa coincide con el de la remisión
-  //             const nombreTarifa = terceroRelacionado ? terceroRelacionado.nombre_tercero.trim().toUpperCase() : "";
-
-  //             return nombreTarifa === nombreActualRemision &&
-  //                    Number(pe.idMaterial) === idMaterialSeleccionado;
-  //           });
-
-  //           return {
-  //             ...li,
-  //             idMaterial: selected.idMaterial,
-  //             nombre_material: selected.nombre_material,
-  //             // Si coincide el nombre del grupo, pone el precio especial, si no el normal
-  //             precioUnitario: tarifaEspecial ? Number(tarifaEspecial.precio) : Number(selected.precio),
-  //           };
-  //         }
-  //       }
-  //       return { ...li, [field]: value };
-  //     })
-  //   );
-  // };
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-  // const handleLineChange = (index, field, value) => {
-  //     setLineItems((prev) =>
-  //       prev.map((li, i) => {
-  //         if (i !== index) return li;
-
-  //         if (field === "idMaterial" || field === "nombre_material") {
-  //           let selected = null;
-  //           if (field === "idMaterial") {
-  //             const idNum = Number(value);
-  //             selected = materials.find((m) => Number(m.idMaterial) === idNum);
-  //           } else {
-  //             selected = materials.find((m) => m.nombre_material === value);
-  //           }
-
-  //           if (selected) {
-  //             // 1. Identificamos al cliente actual de la remisión
-  //             const clienteActual = terceros.find(t => Number(t.id) === Number(formData.idTercero));
-  //             const nombreBusqueda = clienteActual ? clienteActual.nombre_tercero : "";
-
-  //             // 2. Buscamos el precio especial que coincida con ese NOMBRE de empresa
-  //             const precioEspecial = preciosEspeciales.find((pe) => {
-  //               return pe.nombreTercero === nombreBusqueda &&
-  //                       Number(pe.idMaterial) === Number(selected.idMaterial);
-  //             });
-
-  //             return {
-  //               ...li,
-  //               idMaterial: selected.idMaterial,
-  //               nombre_material: selected.nombre_material,
-  //               // Si existe el precio para esa empresa, lo pone; si no, el estándar
-  //               precioUnitario: precioEspecial ? precioEspecial.precio : selected.precio,
-  //             };
-  //           }
-  //         }
-
-  //         if (field === "cantidad") return { ...li, cantidad: value === "" ? "" : Number(value) };
-  //         if (field === "precioUnitario") return { ...li, precioUnitario: value === "" ? "" : Number(value) };
-
-  //         return { ...li, [field]: value };
-  //       })
-  //     );
-  //   };
   //=============================================================================================================
   //=============================================================================================================
 
@@ -755,7 +682,6 @@ export default function InvoiceGenerator({
     setShowModal(false);
 
     try {
-      // CAMBIO CLAVE: Ya no usamos el .reduce() que sumaba las cantidades de la tabla.
       // Usamos el valor que ya trae el formulario (formData.cubica), que es el que puso el Tercero.
       const totalCubicaje = formData.cubica;
 
@@ -812,6 +738,13 @@ export default function InvoiceGenerator({
         idTercero: formData.idTercero ? parseInt(formData.idTercero) : 0,
         idTipoPago: formData.idTipoPago,
         placa: formData.placa || "",
+
+        // 🟩 CAMPOS DE PESAJE
+        pesoEntrada: formData.usarPesaje ? Number(formData.pesoEntrada) : 0,
+        pesoSalida: formData.usarPesaje ? Number(formData.pesoSalida) : 0,
+        pesoNeto: formData.usarPesaje ? Number(formData.pesoNeto) : 0,
+        imprimirPesaje: formData.imprimirPesaje,
+
         direccion: formData.direccion || "",
         observacion: formData.observacion || "",
         conductor: formData.conductor || "",
@@ -839,6 +772,11 @@ export default function InvoiceGenerator({
         let datosActualizar = {
           ...formData,
           fecha: fechaISO,
+
+          pesoEntrada: formData.usarPesaje ? Number(formData.pesoEntrada) : 0,
+          pesoSalida: formData.usarPesaje ? Number(formData.pesoSalida) : 0,
+          pesoNeto: formData.usarPesaje ? Number(formData.pesoNeto) : 0,
+
           incluir_iva: +formData.incluirIva,
           incluir_ret: +formData.incluirRet,
           factura: 0,
@@ -925,188 +863,6 @@ export default function InvoiceGenerator({
       };
 
   //====================================================================================================================
-
-  //====================================================================================================================
-  //   const handleConfirmSave = async () => {
-  //     setIsLoading(true); // [NUEVO] Inicia el estado de carga al presionar "Aceptar" en el modal
-  //     setShowModal(false);
-
-  //     try {
-  //       const totalCubicaje = lineItems.reduce((acc, item) => {
-  //         return acc + (Number(item.cantidad) || 0);
-  //       }, 0);
-
-  //       // 1. Crear fecha combinada localmente
-  //       const fechaLocal = new Date(
-  //         `${formData.fecha}T${formData.horaLlegada}:00`
-  //       );
-
-  //       // 2. Restar el offset de la zona horaria
-  //       const fechaISO = new Date(
-  //         fechaLocal.getTime() - fechaLocal.getTimezoneOffset() * 60000
-  //       ).toISOString();
-
-  //       let remisionLastNumber = await fetchLastRemisionNumber();
-  //       remisionLastNumber = (remisionLastNumber.data[0]?.remision || 0) + 1;
-
-  //       let estadoDeCuentaPayload = null;
-  //       if (formData.tipoPago === "Pago por anticipado") {
-  //         estadoDeCuentaPayload = await fetchPagosPorNoIngreso(
-  //           estadoDeCuenta.no_ingreso
-  //         );
-  //         estadoDeCuentaPayload = estadoDeCuentaPayload[0];
-  //         let remisionesArray = eval(estadoDeCuentaPayload.remisiones);
-  //         if (!isEditing) remisionesArray.push(remisionLastNumber);
-  //         estadoDeCuentaPayload = {
-  //           ...estadoDeCuentaPayload,
-  //           remisiones: `[${remisionesArray}]`,
-  //           valorRemisiones:
-  //             estadoDeCuentaPayload.valorRemisiones +
-  //             estadoDeCuenta.valorRemision -
-  //             (editingMovement?.total || 0),
-  //         };
-  //         delete estadoDeCuentaPayload.saldo;
-  //       }
-
-  //       let creditoActualizarPayload = null;
-  //       if (isEditing && formData.idTipoPago === 4) {
-  //         const respuestaCredito = await fetchCreditosPorNombre(formData.tercero);
-  //         const creditoEnDB = respuestaCredito[0];
-  //         creditoActualizarPayload = {
-  //           ...creditoEnDB,
-  //           valorRemisiones:
-  //             creditoEnDB.valorRemisiones -
-  //             editingMovement.total +
-  //             calculos.total,
-  //         };
-  //       }
-
-  //       const payloadHeader = {
-  //         fecha: fechaISO,
-  //         remision: remisionLastNumber,
-  //         idTercero: formData.idTercero ? parseInt(formData.idTercero) : 0,
-  //         idTipoPago: formData.idTipoPago,
-  //         placa: formData.placa || "",
-  //         direccion: formData.direccion || "",
-  //         observacion: formData.observacion || "",
-  //         conductor: formData.conductor || "",
-  //         cedula: formData.cedula || "",
-  //         telefono: formData.telefono || "",
-  //         no_ingreso: "",
-  //         estado: "VIGENTE",
-  //         pagado: 0,
-  //         factura: 0,
-  //         cubicaje: totalCubicaje,
-  //         subtotal: Number(calculos.subtotal) || 0,
-  //         iva: Number(calculos.iva) || 0,
-  //         retencion: Number(calculos.retencion) || 0,
-  //         total: Number(calculos.total) || 0,
-  //         incluir_iva: formData.incluirIva ? 1 : 0,
-  //         incluir_ret: formData.incluirRet ? 1 : 0,
-  //         tercero: formData.tercero,
-  //         horaLlegada: formData.horaLlegada,
-  //         tipoPago: formData.tipoPago,
-  //         estadoDeCuenta: estadoDeCuentaPayload ?? null,
-  //       };
-
-  //       if (isEditing) {
-  //         setIsEditing(false);
-  //         let datosActualizar = {
-  //           ...formData,
-  //           fecha: fechaISO,
-  //           incluir_iva: +formData.incluirIva,
-  //           incluir_ret: +formData.incluirRet,
-  //           factura: 0,
-  //           observacion: formData.observacion,
-  //           subtotal: Number(calculos.subtotal) || 0,
-  //           iva: Number(calculos.iva) || 0,
-  //           retencion: Number(calculos.retencion) || 0,
-  //           total: Number(calculos.total) || 0,
-  //         };
-
-  //         const usuario = localStorage.getItem("usuario") || "Desconocido";
-
-  //         let cambios = compararDatos(editingMovement, datosActualizar, usuario);
-
-  //         lineItems.forEach((item, idx) => {
-  //           cambios += compararDatos(editingItems.data[idx], item, usuario);
-  //           updateMovimientoItems(editingMovement.remision, item);
-  //         });
-
-  //         datosActualizar = {
-  //           ...datosActualizar,
-  //           observacion: datosActualizar.observacion + cambios,
-  //         };
-
-  //         await updateMovimiento(editingMovement.remision, datosActualizar);
-  //         if (estadoDeCuentaPayload) {
-  //           await updatePago(
-  //             estadoDeCuentaPayload.no_ingreso,
-  //             estadoDeCuentaPayload
-  //           );
-  //         }
-  //         if (creditoActualizarPayload) {
-  //           console.log("Créditos: ", creditoActualizarPayload);
-  //           await updateCredito(
-  //             creditoActualizarPayload.idCredito,
-  //             creditoActualizarPayload
-  //           );
-  //         }
-  //       } else {
-  //         const responseSaved = await onSave(payloadHeader, lineItems);
-  //         setFormData({
-  //           ...payloadHeader,
-  // //==========================================================================================================
-  // //==========================================================================================================
-  //           cubicaje:payloadHeader.totalCubicaje,
-
-  //           remision: responseSaved.data[0].remision,
-  //         });
-  //       }
-
-  //       // --- LÓGICA DE ÉXITO ---
-  //       setLastSavedRecord({ ...payloadHeader, materiales: lineItems });
-  //     } catch (error) {
-  //       console.error("Fallo al guardar:", error);
-  //       alert(`❌ Error al guardar: ${error.message}`);
-  //     } finally {
-  //       setIsLoading(false); // [NUEVO] IMPORTANTE: Siempre apaga el cargando, falle o funcione.
-  //     }
-  //   };
-
-  //   const handleNewRecord = () => {
-  //     const currentParts = getColombiaDateParts(); // Usar la función auxiliar
-
-  //     setFormData((prev) => ({
-  //       ...initialFormData,
-  //       remision: prev.remision,
-  //       fecha: currentParts.fecha, // Fecha Colombia
-  //       horaLlegada: currentParts.hora, // Hora Colombia
-  //     }));
-  //     setLineItems(initialLineItems);
-  //     setCalculos({ subtotal: 0, iva: 0, retencion: 0, total: 0 });
-  //     setLastSavedRecord(null);
-  //   };
-
-  //   const formatCurrency = (val) =>
-  //     new Intl.NumberFormat("es-CO", {
-  //       style: "currency",
-  //       currency: "COP",
-  //       minimumFractionDigits: 0,
-  //       maximumFractionDigits: 0,
-  //     }).format(val);
-
-  //   // Determinar qué datos usar para la vista previa: el guardado si existe, o el formulario actual
-  //   const previewData = lastSavedRecord || {
-  //     ...formData,
-  //     materiales: lineItems.map((li) => ({
-  //       ...li,
-  //       cantidad: Number(li.cantidad) || 0,
-  //       precioUnitario: Number(li.precioUnitario) || 0,
-  //     })),
-  //     ...calculos,
-  //   };
-
   ///todo lo estetico
 
   return (
@@ -1231,6 +987,112 @@ export default function InvoiceGenerator({
                     value={formData.cedula}
                     onChange={(e) => handleChange(e)}
                   />
+                </div>
+
+                {/*---- SECCIÓN DE PESAJE DESPLEGABLE --- */}
+                <div className="mb-6 p-4 border-2 border-dashed border-blue-200 rounded-lg bg-blue-50/50">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
+                    {/* Switch Principal */}
+                    <div className="flex items-center gap-3">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={formData.usarPesaje}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              usarPesaje: e.target.checked,
+                            })
+                          }
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span className="ml-3 text-sm font-bold text-blue-800 uppercase tracking-wider">
+                          ¿Habilitar Control de Pesaje?
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* SEGUNDO SWITCH: Control de Impresión (Solo visible si usarPesaje es true) */}
+                    {formData.usarPesaje && (
+                      <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-full border border-blue-200 shadow-sm animate-in zoom-in duration-300">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">
+                          Mostrar en Impresión:
+                        </span>
+                        <label className="relative inline-flex items-center cursor-pointer scale-75">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={formData.imprimirPesaje}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                imprimirPesaje: e.target.checked,
+                              })
+                            }
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                  {/* <div className="mb-6 p-4 border-2 border-dashed border-blue-200 rounded-lg bg-blue-50/50">
+                  <div className="flex items-center gap-3 mb-2">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={formData.usarPesaje}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            usarPesaje: e.target.checked,
+                          })
+                        }
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <span className="ml-3 text-sm font-bold text-blue-800 uppercase tracking-wider">
+                        ¿Habilitar Control de Pesaje?
+                      </span>
+                    </label>
+                  </div> */}
+
+                  {formData.usarPesaje && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4 p-4 bg-white rounded-md border border-blue-100 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                      <InputGroup
+                        label="Peso Entrada (kg)"
+                        name="pesoEntrada"
+                        type="number"
+                        value={formData.pesoEntrada}
+                        onChange={handlePesoChange}
+                        placeholder="Ej: 12000"
+                      />
+                      <InputGroup
+                        label="Peso Salida (kg)"
+                        name="pesoSalida"
+                        type="number"
+                        value={formData.pesoSalida}
+                        onChange={handlePesoChange}
+                        placeholder="Ej: 18500"
+                      />
+                      <div className="flex flex-col">
+                        <label className="font-bold text-xs uppercase text-green-700 mb-1 tracking-tight">
+                          Peso Neto (Material)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            readOnly
+                            value={formData.pesoNeto}
+                            className="w-full bg-green-50 border-2 border-green-500 p-2.5 rounded text-lg font-mono font-bold text-green-700 text-right"
+                          />
+                          <span className="absolute left-3 top-2.5 text-green-600 font-bold text-sm">
+                            KG
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="h-px bg-gray-200 my-2"></div>
@@ -1568,46 +1430,27 @@ export default function InvoiceGenerator({
         </div>
 
         {/* VISTA PREVIA */}
-        {/* <div className="flex flex-col gap-4 overflow-hidden">
+        <div className="flex flex-col gap-4 overflow-hidden">
           <div className="flex justify-between items-center px-1">
             <h3 className="font-bold text-gray-600 flex items-center gap-2">
               <Printer size={18} /> Vista Previa
             </h3>
-            
-            <button
-              onClick={() => window.print()}
-              className={`text-sm text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-md ${
-                lastSavedRecord
-                  ? "bg-blue-600 hover:bg-blue-700"
-                  : "bg-slate-800 hover:bg-slate-700"
-              }`}
-            >
-              <Printer size={16} />{" "}
-              <span className="hidden sm:inline">Imprimir</span>
-            </button>
-          </div> */}
-          {/* VISTA PREVIA */}
-          <div className="flex flex-col gap-4 overflow-hidden">
-            <div className="flex justify-between items-center px-1">
-              <h3 className="font-bold text-gray-600 flex items-center gap-2">
-                <Printer size={18} /> Vista Previa
-              </h3>
 
-              {/* AQUÍ APLICAMOS EL CAMBIO */}
-              {lastSavedRecord && (
-                <button
-                  onClick={() => window.print()}
-                  className={`text-sm text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-md ${
-                    lastSavedRecord
-                      ? "bg-blue-600 hover:bg-blue-700"
-                      : "bg-slate-800 hover:bg-slate-700"
-                  }`}
-                >
-                  <Printer size={16} />{" "}
-                  <span className="hidden sm:inline">Imprimir</span>
-                </button>
-              )}
-            </div>
+            {/* AQUÍ APLICAMOS EL CAMBIO */}
+            {(lastSavedRecord || isEditing) && (
+              <button
+                onClick={() => window.print()}
+                className={`text-sm text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-md ${
+                  lastSavedRecord
+                    ? "bg-blue-600 hover:bg-blue-700"
+                    : "bg-slate-800 hover:bg-slate-700"
+                }`}
+              >
+                <Printer size={16} />{" "}
+                <span className="hidden sm:inline">Imprimir</span>
+              </button>
+            )}
+          </div>
 
           <div className="bg-gray-100 p-2 md:p-4 rounded-xl border border-gray-200 overflow-x-auto">
             <div
@@ -1676,24 +1519,85 @@ export default function InvoiceGenerator({
                     <span className="font-bold text-red-600 text-lg md:text-xl font-mono tracking-widest">
                       {formatearRemision(previewData.remision)}
                     </span>
-                    <span className="font-bold text-right pr-3 text-sm md:text-base">Celular:</span>
+                    <span className="font-bold text-right pr-3 text-sm md:text-base">
+                      Celular:
+                    </span>
                     <span>{previewData.telefono}</span>
-                    <span className="font-bold text-right pr-3 text-sm md:text-base">Placa:</span>
+                    <span className="font-bold text-right pr-3 text-sm md:text-base">
+                      Placa:
+                    </span>
                     <span className="uppercase border-2 border-black px-2 py-0.5 inline-block text-center font-bold w-24 bg-white">
                       {previewData.placa}
                     </span>
-                    <span className="font-bold text-right pr-3 text-sm md:text-base ">Pago:</span>
+                    <span className="font-bold text-right pr-3 text-sm md:text-base ">
+                      Pago:
+                    </span>
                     <span className="text-[10px] md:text-xs uppercase">
                       {previewData.tipoPago}
                     </span>
 
-                    <span className="font-bold text-right pr-3 text-sm md:text-base">Cubica:</span>
+                    <span className="font-bold text-right pr-3 text-sm md:text-base">
+                      Cubica:
+                    </span>
+
                     <span className="text-lg md:text-xl font-black uppercase px-1">
                       {previewData.cubica}
                     </span>
                   </div>
                 </div>
               </div>
+
+              {/* --- SECCIÓN DE PESAJE (LETRA GRANDE Y LÓGICA CORREGIDA) --- */}
+              {previewData &&
+                (previewData.imprimirPesaje || formData.imprimirPesaje) && (
+                  <div className="border-x-2 border-b-2 border-black p-3 bg-white print:block">
+                    <div className="flex justify-around items-center border-2 border-dashed border-gray-400 p-2 rounded-sm">
+                      {/* PESO ENTRADA */}
+                      <div className="text-center">
+                        <p className="text-[11px] font-bold text-gray-500 uppercase leading-none mb-1">
+                          P. Entrada
+                        </p>
+                        <p className="text-xl font-mono font-bold text-black">
+                          {Number(
+                            previewData.pesoEntrada || 0
+                          ).toLocaleString()}
+                          <span className="text-xs ml-1 font-sans">kg</span>
+                        </p>
+                      </div>
+
+                      <div className="text-3xl text-gray-300 font-light">|</div>
+
+                      {/* PESO SALIDA */}
+                      <div className="text-center">
+                        <p className="text-[11px] font-bold text-gray-500 uppercase leading-none mb-1">
+                          P. Salida
+                        </p>
+                        <p className="text-xl font-mono font-bold text-black">
+                          {Number(previewData.pesoSalida || 0).toLocaleString()}
+                          <span className="text-xs ml-1 font-sans">kg</span>
+                        </p>
+                      </div>
+
+                      <div className="text-3xl text-gray-300 font-light">|</div>
+
+                      {/* PESO NETO */}
+                      <div className="text-center px-6 py-1.5 bg-gray-50 border border-gray-200 rounded-sm">
+                        <p className="text-[11px] font-bold text-green-700 uppercase leading-none mb-1">
+                          Peso Neto
+                        </p>
+                        <p className="text-2xl font-mono font-black text-green-800">
+                          {Number(
+                            previewData.peso_neto ||
+                              Number(previewData.pesoSalida) -
+                                Number(previewData.pesoEntrada) ||
+                              0
+                          ).toLocaleString()}
+                          <span className="text-sm ml-1 font-sans">kg</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
               {/* Tabla de items */}
               <div className="border-x-2 border-b-2 border-black">
@@ -1798,688 +1702,3 @@ export default function InvoiceGenerator({
     </div>
   );
 }
-
-////////////////////////////////////////////////////////////////////////////////////
-
-//   return (
-//     <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
-//       {/* 1. MODAL DE CONFIRMACIÓN */}
-//       <Modal
-//         show={showModal}
-//         title="Confirmar Registro"
-//         message={`¿Estás seguro de que la Remisión ha sido diligenciada correctamente y deseas guardarla?`}
-//         onConfirm={handleConfirmSave}
-//         onCancel={() => setShowModal(false)}
-//         confirmText="Confirmar Guardado"
-//         cancelText="Revisar"
-//       />
-
-//       {/* FORMULARIO */}
-//       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden sticky top-4">
-//         <div className="bg-linear-to-r from-gray-50 to-white px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-//           <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-//             <FileText size={18} className="text-emerald-600" /> Datos de
-//             Remisión
-//             {lastSavedRecord && (
-//               <span className="text-sm font-normal ml-3 bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
-//                 REGISTRO GUARDADO
-//               </span>
-//             )}
-//           </h2>
-//         </div>
-
-//         <div className="p-6 space-y-5">
-//           {/* Si ya se guardó, solo mostramos el botón de Nuevo Registro */}
-//           {lastSavedRecord ? (
-//             <div className="flex flex-col items-center justify-center p-8 bg-emerald-50 rounded-lg border border-emerald-200">
-//               <p className="text-lg font-semibold text-emerald-800 mb-4">
-//                 Remisión **{lastSavedRecord.remision}** Guardada Exitosamente.
-//               </p>
-//               <button
-//                 onClick={handleNewRecord}
-//                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-//               >
-//                 <PlusCircle size={20} /> NUEVO REGISTRO
-//               </button>
-//               <p className="text-sm text-gray-600 mt-3">
-//                 Puede imprimir la remisión a la derecha.
-//               </p>
-//             </div>
-//           ) : (
-//             // Si no se ha guardado, mostramos el formulario completo
-//             <>
-//               <div className="grid grid-cols-2 gap-4">
-//                 <InputGroup
-//                   label="Fecha"
-//                   name="fecha"
-//                   type="date"
-//                   value={formData.fecha}
-//                   onChange={(e) =>
-//                     handleChange({
-//                       target: { name: "fecha", value: e.target.value },
-//                     })
-//                   }
-//                 />
-//                 <InputGroup
-//                   label="No. Remisión"
-//                   name="remision"
-//                   value={formData.remision}
-//                   onChange={(e) =>
-//                     handleChange({
-//                       target: { name: "remision", value: e.target.value },
-//                     })
-//                   }
-//                   validate={false}
-//                 />
-//               </div>
-
-//               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//                 <InputAutosuggest
-//                   label="Cliente / Tercero"
-//                   name="tercero"
-//                   value={formData.tercero}
-//                   onChange={(e) => handleChange(e)}
-//                   searchEndpoint={searchTercero}
-//                   textSuggestor="nombre"
-//                   keyItems="id_tercero"
-//                 />
-//                 <InputGroup
-//                   label="Placa Vehículo"
-//                   name="placa"
-//                   value={formData.placa}
-//                   onChange={(e) => handleChange(e)}
-//                 />
-//               </div>
-
-//               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-//                 <div className="md:col-span-2">
-//                   <InputGroup
-//                     label="Conductor"
-//                     name="conductor"
-//                     value={formData.conductor}
-//                     onChange={(e) => handleChange(e)}
-//                   />
-//                 </div>
-//                 <InputGroup
-//                   label="Teléfono"
-//                   name="telefono"
-//                   value={formData.telefono}
-//                   onChange={(e) => handleChange(e)}
-//                 />
-//               </div>
-
-//               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//                 <InputGroup
-//                   label="Dirección"
-//                   name="direccion"
-//                   value={formData.direccion}
-//                   onChange={(e) => handleChange(e)}
-//                   tooltip="Hacia a donde se dirige la carga"
-//                 />
-
-//                 <InputGroup
-//                   label="Cédula"
-//                   name="cedula"
-//                   value={formData.cedula}
-//                   onChange={(e) => handleChange(e)}
-//                 />
-//               </div>
-
-//               <div className="h-px bg-gray-200 my-2"></div>
-
-//               {/* --- Sección Materiales: múltiple filas --- */}
-//               <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-100">
-//                 <div className="grid grid-cols-3 gap-4 items-end">
-//                   <div className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
-//                     Material
-//                   </div>
-//                   <div className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
-//                     Cantidad (m³)
-//                   </div>
-//                   <div className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
-//                     Precio Unitario
-//                   </div>
-//                 </div>
-
-//                 {lineItems.map((li, idx) => (
-//                   <div
-//                     key={li.id}
-//                     className="grid grid-cols-3 gap-4 items-center"
-//                   >
-//                     {/* Select material */}
-//                     <div className="flex flex-col gap-1">
-//                       <select
-//                         name={`material-${idx}`}
-//                         value={li.idMaterial ?? li.nombre_material ?? ""}
-//                         onChange={(e) => {
-//                           // preferimos trabajar por idMaterial si el select usa id
-//                           const selectedId = e.target.value;
-//                           // si las opciones usan idMaterial como value, buscar por id
-//                           handleLineChange(idx, "idMaterial", selectedId);
-//                         }}
-//                         className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
-//                       >
-//                         <option value="">Seleccione un material</option>
-//                         {materials.map((m) => (
-//                           <option key={m.idMaterial} value={m.idMaterial}>
-//                             {m.nombre_material}
-//                           </option>
-//                         ))}
-//                       </select>
-//                     </div>
-
-//                     {/* Cantidad */}
-//                     <div>
-//                       <input
-//                         type="number"
-//                         min="0"
-//                         step="0.01"
-//                         name={`cantidad-${idx}`}
-//                         value={li.cantidad === "" ? "" : li.cantidad}
-//                         onChange={(e) =>
-//                           handleLineChange(idx, "cantidad", e.target.value)
-//                         }
-//                         className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
-//                         placeholder="..."
-//                       />
-//                     </div>
-
-//                     {/* Precio unitario + eliminar */}
-//                     <div className="flex gap-2 items-center">
-//                       <input
-//                         type="number"
-//                         min="0"
-//                         step="1"
-//                         name={`precioUnitario-${idx}`}
-//                         value={
-//                           li.precioUnitario === "" ? "" : li.precioUnitario
-//                         }
-//                         onChange={(e) =>
-//                           handleLineChange(
-//                             idx,
-//                             "precioUnitario",
-//                             e.target.value
-//                           )
-//                         }
-//                         className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
-//                         placeholder="..."
-//                       />
-//                       <button
-//                         type="button"
-//                         onClick={() => removeLine(idx)}
-//                         className="text-sm px-3 py-2 border border-red-200 text-red-600 rounded-md hover:bg-red-50"
-//                         title="Eliminar material"
-//                       >
-//                         ×
-//                       </button>
-//                     </div>
-//                   </div>
-//                 ))}
-
-//                 <div className="flex justify-between items-center">
-//                   <button
-//                     type="button"
-//                     onClick={addLine}
-//                     className="text-sm bg-transparent text-emerald-600 font-medium px-3 py-2 rounded-md hover:bg-emerald-50"
-//                   >
-//                     + Agregar material
-//                   </button>
-
-//                   <div className="bg-emerald-50 p-3 rounded-lg w-full sm:w-auto min-w-[220px] border border-emerald-100 shadow-sm">
-//                     <div className="flex justify-between font-bold text-lg text-emerald-700">
-//                       <span>TOTAL:</span>
-//                       <span>{formatCurrency(calculos.total)}</span>
-//                     </div>
-//                   </div>
-//                 </div>
-//               </div>
-//               {/* --- Fin sección materiales --- */}
-
-//               {/* Totales Opcionales */}
-//               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-//                 <div className="space-y-2 pt-2">
-//                   <label className="flex items-center gap-2 cursor-pointer select-none">
-//                     <input
-//                       type="checkbox"
-//                       name="incluirIva"
-//                       checked={formData.incluirIva}
-//                       onChange={(e) => handleChange(e)}
-//                       className="rounded text-emerald-600 w-4 h-4"
-//                     />
-//                     <span className="text-sm text-gray-600">
-//                       Incluir IVA (19%)
-//                     </span>
-//                   </label>
-//                   <label className="flex items-center gap-2 cursor-pointer select-none">
-//                     <input
-//                       type="checkbox"
-//                       name="incluirRet"
-//                       checked={formData.incluirRet}
-//                       onChange={(e) => handleChange(e)}
-//                       className="rounded text-emerald-600 w-4 h-4"
-//                     />
-//                     <span className="text-sm text-gray-600">
-//                       Incluir Retención
-//                     </span>
-//                   </label>
-//                   <label className="flex items-center gap-2 cursor-pointer select-none">
-//                     <input
-//                       type="checkbox"
-//                       name="incluirRet"
-//                       checked={showIVARet}
-//                       onChange={(e) => setShowIVARet(e.target.checked)}
-//                       className="rounded text-emerald-600 w-4 h-4"
-//                     />
-//                     <span className="text-sm text-gray-600">
-//                       Mostrar IVA y Retención
-//                     </span>
-//                   </label>
-//                 </div>
-//               </div>
-
-//               {/* Horas y Tipo de Pago */}
-//               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-//                 <InputGroup
-//                   label="Hora Llegada"
-//                   name="horaLlegada"
-//                   type="time"
-//                   value={formData.horaLlegada}
-//                   onChange={(e) => handleChange(e)}
-//                 />
-//                 <InputGroup
-//                   label="Hora Salida"
-//                   name="horaSalida"
-//                   type="time"
-//                   value={formData.horaSalida}
-//                   onChange={(e) => handleChange(e)}
-//                   validate={false}
-//                 />
-
-//                 <div className="col-span-2 flex flex-col gap-1">
-//                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
-//                     Tipo Pago
-//                   </label>
-//                   <select
-//                     name="tipoPago"
-//                     value={formData.tipoPago}
-//                     onChange={(e) => handleChange(e)}
-//                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
-//                   >
-//                     {paymentTypes.map((p) => (
-//                       <option
-//                         key={p.idTipoPago ?? p.id}
-//                         value={p.tipo_pago ?? p.name ?? p.tipoPago}
-//                       >
-//                         {p.tipo_pago ?? p.name ?? p.tipoPago}
-//                       </option>
-//                     ))}
-//                   </select>
-//                 </div>
-
-//                 {formData.tipoPago === "Pago por anticipado" && (
-//                   <div className="col-span-2 flex flex-col gap-1">
-//                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wide pl-1">
-//                       No. de ingreso
-//                     </label>
-//                     <select
-//                       name="no_ingreso"
-//                       value={estadoDeCuenta.no_ingreso}
-//                       onChange={(e) => handleChange(e)}
-//                       className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
-//                     >
-//                       <option key={0} value={0}>
-//                         Seleccione un ingreso
-//                       </option>
-//                       {pagosAnticipados.map((p) => (
-//                         <option key={p.no_ingreso} value={p.no_ingreso}>
-//                           {p.no_ingreso} - {formatCurrency(p.valor)}
-//                         </option>
-//                       ))}
-//                     </select>
-//                   </div>
-//                 )}
-//               </div>
-//               {formData.tipoPago === "Pago por anticipado" &&
-//                 estadoDeCuenta.no_ingreso !== 0 && (
-//                   <div className="col-span-2 bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-2 shadow-inner">
-//                     <div className="flex items-center gap-2 mb-3 border-b border-emerald-100 pb-2">
-//                       <div className="bg-emerald-500 p-1.5 rounded-lg text-white">
-//                         <FileText size={16} />
-//                       </div>
-//                       <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-tight">
-//                         No. ingreso {estadoDeCuenta.no_ingreso}
-//                       </h4>
-//                     </div>
-
-//                     <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-6 text-sm">
-//                       <div className="flex justify-between items-center">
-//                         <span className="text-emerald-600 font-medium">
-//                           Valor Anticipo:
-//                         </span>
-//                         <span className="text-gray-700 font-mono">
-//                           {formatCurrency(estadoDeCuenta.valorAnticipo)}
-//                         </span>
-//                       </div>
-
-//                       <div className="flex justify-between items-center">
-//                         <span className="text-emerald-600 font-medium">
-//                           Saldo Actual:
-//                         </span>
-//                         <span className="text-gray-700 font-mono">
-//                           {formatCurrency(estadoDeCuenta.saldo)}
-//                         </span>
-//                       </div>
-
-//                       <div className="flex justify-between items-center">
-//                         <span className="text-emerald-600 font-medium">
-//                           Valor de Remisiones:
-//                         </span>
-//                         <span className="text-gray-700 font-mono">
-//                           {formatCurrency(estadoDeCuenta.valorRemisiones)}
-//                         </span>
-//                       </div>
-
-//                       <div className="flex justify-between items-center col-span-1 md:col-span-2 pt-2 border-t border-emerald-100">
-//                         <span className="text-emerald-800 font-bold">
-//                           Saldo tras esta remisión:
-//                         </span>
-//                         <span
-//                           className={`text-base font-bold font-mono ${
-//                             estadoDeCuenta.saldo -
-//                               estadoDeCuenta.valorRemision <
-//                             0
-//                               ? "text-red-600 animate-pulse"
-//                               : "text-emerald-700"
-//                           }`}
-//                         >
-//                           {formatCurrency(
-//                             estadoDeCuenta.saldo - estadoDeCuenta.valorRemision
-//                           )}
-//                         </span>
-//                       </div>
-//                     </div>
-
-//                     {estadoDeCuenta.remisiones !== "[]" && (
-//                       <div className="mt-3 text-[10px] text-emerald-600 italic bg-white/50 p-2 rounded border border-emerald-50">
-//                         <span className="font-bold">
-//                           Remisiones vinculadas:
-//                         </span>{" "}
-//                         {estadoDeCuenta.remisiones}
-//                       </div>
-//                     )}
-//                   </div>
-//                 )}
-//               <InputGroup
-//                 label="Observaciones"
-//                 name="observacion"
-//                 value={formData.observacion}
-//                 onChange={(e) => handleChange(e)}
-//                 validate={false}
-//                 type="textarea"
-//               />
-
-//               <button
-//                 onClick={handleAttemptSave}
-//                 disabled={isLoading} // Bloquea el botón mientras carga
-//                 className={`w-full text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer mt-4 ${
-//                   isLoading
-//                     ? "bg-gray-400 cursor-not-allowed"
-//                     : isEditing
-//                     ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
-//                     : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
-//                 }`}
-//               >
-//                 {isLoading ? (
-//                   <>
-//                     {/* Círculo de carga (Spinner) */}
-//                     <svg
-//                       className="animate-spin h-5 w-5 text-white"
-//                       xmlns="http://www.w3.org/2000/svg"
-//                       fill="none"
-//                       viewBox="0 0 24 24"
-//                     >
-//                       <circle
-//                         className="opacity-25"
-//                         cx="12"
-//                         cy="12"
-//                         r="10"
-//                         stroke="currentColor"
-//                         strokeWidth="4"
-//                       ></circle>
-//                       <path
-//                         className="opacity-75"
-//                         fill="currentColor"
-//                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-//                       ></path>
-//                     </svg>
-//                     <span>PROCESANDO...</span>
-//                   </>
-//                 ) : (
-//                   <>
-//                     <Save size={20} />
-//                     <span>
-//                       {isEditing ? "GUARDAR CAMBIOS" : "GUARDAR REMISIÓN"}
-//                     </span>
-//                   </>
-//                 )}
-//               </button>
-//               {/* El botón ahora llama a handleAttemptSave para mostrar el modal */}
-//               {/* <button
-//                 onClick={handleAttemptSave}
-//                 className={`w-full text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer mt-4 ${
-//                   isEditing
-//                     ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
-//                     : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
-//                 }`}
-//               >
-//                 <Save size={20} />{" "}
-//                 {isEditing ? "GUARDAR CAMBIOS" : "GUARDAR REMISIÓN"}
-//               </button> */}
-//             </>
-//           )}
-//         </div>
-//       </div>
-
-//       {/* VISTA PREVIA */}
-//       <div className="flex flex-col gap-4">
-//         <div className="flex justify-between items-center px-1">
-//           <h3 className="font-bold text-gray-600 flex items-center gap-2">
-//             <Printer size={18} /> Vista Previa
-//           </h3>
-//           <button
-//             onClick={() => window.print()}
-//             // El color ahora es azul si el registro está guardado (para destacar la acción de impresión)
-//             className={`text-sm text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-md ${
-//               lastSavedRecord
-//                 ? "bg-blue-600 hover:bg-blue-700"
-//                 : "bg-slate-800 hover:bg-slate-700"
-//             }`}
-//           >
-//             <Printer size={16} /> Imprimir
-//           </button>
-//         </div>
-
-//         <div
-//           className="bg-white shadow-2xl p-8 min-h-[800px] text-xs md:text-sm text-black font-sans border border-gray-200 relative"
-//           id="invoice-print"
-//         >
-//           <div className="border-2 border-black mb-4">
-//             {/* CONTENEDOR FLEX PARA LOGO + TEXTO */}
-//             <div className="flex items-center border-b-2 border-black bg-gray-50 p-3">
-//               {/* LOGO IZQUIERDA */}
-//               <img
-//                 src={LogoEmprecal}
-//                 alt="Logo Emprecal"
-//                 className="w-20 h-20 object-contain mr-4"
-//               />
-
-//               {/* TEXTO CENTRADO */}
-//               <div className="flex-1 text-center">
-//                 <div className="font-bold text-xl">
-//                   EMPRECAL S.A.S NIT. 804.002.739-1
-//                 </div>
-//                 <div className="text-xs font-normal mt-1 text-gray-600">
-//                   Kilómetro 9 vía San Gil - Socorro | Cel. 3138880467
-//                 </div>
-//               </div>
-//             </div>
-//           </div>
-//           <div className="grid grid-cols-2 divide-x-2 divide-black">
-//             <div className="p-3">
-//               <div className="grid grid-cols-[70px_1fr] gap-y-2">
-//                 <span className="font-bold">Fecha:</span>
-//                 <span>
-//                   {previewData.fecha.toLocaleString("es-CO", {
-//                     timeZone: "America/Bogota",
-//                   })}
-//                 </span>
-//                 <span className="font-bold">Señores:</span>
-//                 <span className="uppercase font-medium">
-//                   {previewData.tercero || "................................"}
-//                 </span>
-//                 <span className="font-bold">Dirección:</span>
-//                 <span className="uppercase font-medium">
-//                   {previewData.direccion || "................................"}
-//                 </span>
-//                 <span className="font-bold">Cédula:</span>
-//                 <span className="uppercase font-medium">
-//                   {previewData.cedula || "................................"}
-//                 </span>
-//                 <span className="font-bold">Transp.:</span>
-//                 <span className="uppercase font-medium">
-//                   {previewData.conductor || "................................"}
-//                 </span>
-//                 <span className="font-bold">Llegada:</span>
-//                 <span className="uppercase font-medium">
-//                   {previewData.horaLlegada}
-//                 </span>
-//                 <span className="font-bold">Salida:</span>
-//                 <span className="uppercase font-medium">
-//                   {previewData.horaSalida}
-//                 </span>
-//               </div>
-//             </div>
-//             <div className="p-3 bg-gray-50">
-//               <div className="grid grid-cols-[80px_1fr] gap-y-1 items-center">
-//                 <span className="font-bold text-right pr-3">REMISIÓN:</span>
-//                 <span className="font-bold text-red-600 text-xl font-mono tracking-widest">
-//                   {previewData.remision}
-//                 </span>
-//                 <span className="font-bold text-right pr-3">Celular:</span>
-//                 <span>{previewData.telefono}</span>
-//                 <span className="font-bold text-right pr-3">Placa:</span>
-//                 <span className="uppercase border-2 border-black px-2 py-0.5 inline-block text-center font-bold w-24 bg-white">
-//                   {previewData.placa}
-//                 </span>
-//                 <span className="font-bold text-right pr-3">Pago:</span>
-//                 <span>{previewData.tipoPago}</span>
-//               </div>
-//             </div>
-//           </div>
-
-//           {/* Tabla de items con múltiples filas */}
-//           <div className="border-2 border-black mb-4">
-//             <div className="grid grid-cols-[80px_1fr_100px_100px] bg-gray-200 border-b-2 border-black font-bold text-center p-2 text-xs uppercase tracking-wider">
-//               <div>Cantidad</div>
-//               <div>Descripción</div>
-//               <div>Precio Unit.</div>
-//               <div>Total</div>
-//             </div>
-
-//             <div>
-//               {" "}
-//               {/* Div va a ir vacio para poner los materiales vendidos */}
-//               {previewData.materiales.map((li, i) => {
-//                 const cantidad = Number(li.cantidad) || 0;
-//                 const precio = Number(li.precioUnitario) || 0;
-//                 const total = cantidad * precio;
-//                 // Mostrar solo las líneas con cantidad > 0 si ya está guardado, o todas si no.
-//                 if (lastSavedRecord && cantidad === 0) return null;
-
-//                 return (
-//                   <div
-//                     // key={li.id + "-preview"}
-//                     key={`${li.id || i}-preview`}
-//                     className="grid grid-cols-[80px_1fr_100px_100px] text-center p-1 content-start"
-//                   >
-//                     <div className="py-2 font-medium">
-//                       {cantidad > 0 ? cantidad : ""}
-//                     </div>
-//                     <div className="py-2 uppercase text-left px-4 font-medium">
-//                       {li.nombre_material || ""}
-//                     </div>
-//                     <div className="py-2 text-gray-600">
-//                       {precio > 0 ? formatCurrency(precio) : ""}
-//                     </div>
-//                     <div className="py-2 font-medium">
-//                       {total > 0 ? formatCurrency(total) : ""}
-//                     </div>
-//                   </div>
-//                 );
-//               })}
-//             </div>
-
-//             <div className="border-t-2 border-black text-sm">
-//               <div className="grid grid-cols-[1fr_120px]">
-//                 <div className="text-right pr-3 font-bold py-1 border-r-2 border-black bg-gray-50">
-//                   SUBTOTAL:
-//                 </div>
-//                 <div className="text-right pr-3 py-1 font-mono">
-//                   {formatCurrency(previewData.subtotal)}
-//                 </div>
-//               </div>
-
-//               {showIVARet && previewData.incluirIva && (
-//                 <div className="grid grid-cols-[1fr_120px] border-t border-black">
-//                   <div className="text-right pr-3 font-bold py-1 border-r-2 border-black bg-gray-50">
-//                     IVA (19%):
-//                   </div>
-//                   <div className="text-right pr-3 py-1 font-mono">
-//                     {formatCurrency(previewData.iva)}
-//                   </div>
-//                 </div>
-//               )}
-
-//               {showIVARet && previewData.incluirRet && (
-//                 <div className="grid grid-cols-[1fr_120px] border-t border-black">
-//                   <div className="text-right pr-3 font-bold py-1 border-r-2 border-black bg-gray-50">
-//                     RETENCIÓN:
-//                   </div>
-//                   <div className="text-right pr-3 py-1 font-mono">
-//                     {formatCurrency(previewData.retencion)}
-//                   </div>
-//                 </div>
-//               )}
-
-//               <div className="grid grid-cols-[1fr_120px] border-t-2 border-black bg-gray-200">
-//                 <div className="text-right pr-3 font-bold py-2 border-r-2 border-black text-base">
-//                   TOTAL A PAGAR:
-//                 </div>
-//                 <div className="text-right pr-3 py-2 font-bold text-base font-mono">
-//                   {showIVARet
-//                     ? formatCurrency(previewData.total)
-//                     : formatCurrency(previewData.subtotal)}
-//                 </div>
-//               </div>
-//             </div>
-//           </div>
-
-//           <div className="border-2 border-black p-3 min-h-[60px] rounded-sm mb-4">
-//             <span className="font-bold block text-xs uppercase text-gray-500">
-//               Obs:
-//             </span>{" "}
-//             <span className="italic">{previewData.observacion}</span>
-//           </div>
-//           {/* SECCIÓN DE FIRMA (ALINEADA A LA DERECHA CON ESPACIO SUPERIOR) */}
-//           <div className="w-full mt-8 flex items-center gap-4 pr-70">
-//             <p className="font-bold uppercase tracking-wide whitespace-nowrap">
-//               Firma tercero:
-//             </p>
-//             <div className="flex-1 border-t-2 border-black"></div>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-// 

@@ -1,12 +1,14 @@
 // Importa token
 import { getToken } from "./authService";
 // true = modo edicion
-// false = modo real 
-const isDev = false;
+// false = modo real
+const isDev = true;
 
 const BASE_URL = !isDev
   ? "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev"
   : "http://192.168.150.5:8000";
+
+const BASE_URL_COMPRAS = "http://192.168.150.5:8001";
 
 // Headers con token
 // Headers con token con log de depuración
@@ -207,20 +209,17 @@ export const cambiarEstadoDePagoMovimiento = async (remision, nuevo_estado) => {
  * @returns {Promise<object>} La respuesta del API.
  */
 export const updateMovimientoStatus = async (remision, newState) => {
-  // OBTENER el movimiento completo usando el endpoint específico /movimientos/{remision}
   const movimientoActual = await fetchMovimiento(remision);
 
   if (!movimientoActual) {
     throw new Error(`Movimiento con remisión ${remision} no encontrado.`);
   }
 
-  // NORMALIZAR los datos para el PUT, asegurando que los IDs se mantienen.
   const movimientoNormalizado = {
     // --- PROPIEDADES BASE Y NUMÉRICAS ---
     remision: Number(movimientoActual.remision) || 0,
     fecha: movimientoActual.fecha || new Date().toISOString(),
 
-    //Se toman los IDs correctos de la respuesta del GET.
     idTercero: Number(movimientoActual.idTercero),
     subtotal: Number(movimientoActual.subtotal) || 0,
     iva: Number(movimientoActual.iva) || 0,
@@ -232,6 +231,11 @@ export const updateMovimientoStatus = async (remision, newState) => {
     total: Number(movimientoActual.total) || 0,
     pagado: Number(movimientoActual.pagado) || 0,
     factura: Number(movimientoActual.factura) || 0,
+
+    // --- AGREGAR ESTOS CAMPOS DE PESO PARA NO PERDERLOS ---
+    pesoEntrada: Number(movimientoActual.pesoEntrada) || 0,
+    pesoSalida: Number(movimientoActual.pesoSalida) || 0,
+    pesoNeto: Number(movimientoActual.pesoNeto) || 0,
 
     // --- PROPIEDADES DE TEXTO ---
     placa: movimientoActual.placa || "",
@@ -245,14 +249,9 @@ export const updateMovimientoStatus = async (remision, newState) => {
     usuario: movimientoActual.usuario,
   };
 
-  //Enviar la actualización PUT al endpoint seguro /movimientos/{remision}.
   return await updateMovimiento(remision, movimientoNormalizado);
 };
 
-/**
- * Crea un item individual (material) asociado a un movimiento.
- * Endpoint: /movimientoItems
- */
 export const createMovimientoItem = async (item) => {
   const res = await fetch(`${BASE_URL}/movimientoItems`, {
     method: "POST",
@@ -317,7 +316,7 @@ export const updateMovimientoItems = async (remision, items) => {
   return await res.json();
 };
 /* ============================================================
-   🟩 TERCEROS - CORREGIDO
+   🟩 TERCEROS 
    ============================================================ */
 
 // Función auxiliar para manejar errores de respuesta
@@ -336,7 +335,7 @@ export const fetchTerceros = async () => {
       headers: getAuthHeaders(),
     });
     const json = await response.json();
-    return Array.isArray(json.data) ? json.data : (json || []);
+    return Array.isArray(json.data) ? json.data : json || [];
   } catch (error) {
     console.error("Error obteniendo terceros:", error);
     return [];
@@ -360,32 +359,6 @@ export const createTercero = async (tercero) => {
   }
 };
 
-// export const updateTercero = async (id, tercero) => {
-//   try {
-//     // 1. Limpieza de datos antes de enviar
-//     const dataAEnviar = {
-//       ...tercero,
-//       // Convertimos a Number para asegurar el tipo int(7) de la DB
-//       id_tercero: Number(id), 
-//       // Convertimos null a "" y quitamos espacios para no exceder varchar(20)
-//       telefono: tercero.telefono ? String(tercero.telefono).trim() : "" 
-//     };
-
-//     const res = await fetch(`${BASE_URL}/terceros`, {
-//       method: "PUT",
-//       headers: {
-//         ...getAuthHeaders(),
-//         "Content-Type": "application/json",
-//       },
-//       body: JSON.stringify(dataAEnviar),
-//     });
-
-//     return await handleResponse(res);
-//   } catch (error) {
-//     console.error("Error detallado en updateTercero:", error);
-//     throw error;
-//   }
-// };
 export const updateTercero = async (id, tercero) => {
   try {
     // IMPORTANTE: Quitamos el /${id} de la URL porque tu API usa la ruta base para PUT
@@ -398,7 +371,7 @@ export const updateTercero = async (id, tercero) => {
       // El ID ya va aquí dentro según tu imagen de Swagger
       body: JSON.stringify({
         ...tercero,
-        id_tercero: Number(id) 
+        id_tercero: Number(id),
       }),
     });
 
@@ -421,55 +394,7 @@ export const searchTercero = async (query = "") => {
     return [];
   }
 };
-// /* ============================================================
-//    🟩 TERCEROS
-//    ============================================================ */
 
-// export const fetchTerceros = async () => {
-//   try {
-//     const response = await fetch(`${BASE_URL}/terceros`, {
-//       headers: getAuthHeaders(),
-//     });
-
-//     const json = await response.json();
-//     return Array.isArray(json.data) ? json.data : [];
-//   } catch (error) {
-//     console.error("Error obteniendo terceros:", error);
-//     return [];
-//   }
-// };
-
-// export const createTercero = async (tercero) => {
-//   const res = await fetch(`${BASE_URL}/terceros`, {
-//     method: "POST",
-//     headers: getAuthHeaders(),
-//     body: JSON.stringify(tercero),
-//   });
-//   return await res.json();
-// };
-
-// export const updateTercero = async (id, tercero) => {
-//   const res = await fetch(`${BASE_URL}/terceros/${id}`, {
-//     method: "PUT",
-//     headers: getAuthHeaders(),
-//     body: JSON.stringify(tercero),
-//   });
-//   return await res.json();
-// };
-
-// export const searchTercero = async (query = "") => {
-//   try {
-//     const response = await fetch(`${BASE_URL}/terceros/${query}`, {
-//       headers: getAuthHeaders(),
-//     });
-
-//     const json = await response.json();
-//     return Array.isArray(json.data) ? json.data : [];
-//   } catch (error) {
-//     console.error("Error obteniendo terceros:", error);
-//     return [];
-//   }
-// };
 
 /* ============================================================
    PRECIOS ESPECIALES
@@ -1162,7 +1087,7 @@ export const createCuadreDiario = async (arqueo) => {
 };
 
 // ====================================================================
-// 🟦 VISUALIZACION DE CUADRE CAJA EN UTILIDADES 
+// 🟦 VISUALIZACION DE CUADRE CAJA EN UTILIDADES
 // ====================================================================
 
 export const fetchCuadresCaja = async (fecha) => {
@@ -1172,7 +1097,7 @@ export const fetchCuadresCaja = async (fecha) => {
 
     // Cambiamos el parámetro a 'fecha_busqueda' como pide tu endpoint
     const url = `${BASE_URL}/cuadre_caja_view?fecha_busqueda=${fecha}`;
-    
+
     const response = await fetch(url, { headers: getAuthHeaders() });
     const json = await response.json();
 
@@ -1190,11 +1115,13 @@ export const fetchCuadresCaja = async (fecha) => {
 export const fetchGastosDetalleHistorico = async (fecha, timesnap) => {
   try {
     // Usamos encodeURIComponent para que los espacios y símbolos de la fecha no rompan la URL
-    const url = `${BASE_URL}/cuadre_caja_view/corte-temporal?fecha_busqueda=${fecha}&timesnap=${encodeURIComponent(timesnap)}`;
-    
-    const response = await fetch(url, { 
-      method: 'GET',
-      headers: getAuthHeaders() // <--- ESTA ES LA CLAVE
+    const url = `${BASE_URL}/cuadre_caja_view/corte-temporal?fecha_busqueda=${fecha}&timesnap=${encodeURIComponent(
+      timesnap
+    )}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getAuthHeaders(), // <--- ESTA ES LA CLAVE
     });
 
     if (!response.ok) {
@@ -1390,14 +1317,16 @@ export const fetchVentasPorFecha = async (inicio, fin) => {
 export const fetchCubicajePorMaterial = async (inicio, fin) => {
   try {
     // Enviamos las fechas tal cual vienen del input date (2026-01-09 23:59:59)  YYYY-MM-DD HH:mm:ss
-    const url = `${BASE_URL}/movimientoItems/cubicaje-material?fecha_inicio=${encodeURIComponent(inicio)}&fecha_fin=${encodeURIComponent(fin)}`;
+    const url = `${BASE_URL}/movimientoItems/cubicaje-material?fecha_inicio=${encodeURIComponent(
+      inicio
+    )}&fecha_fin=${encodeURIComponent(fin)}`;
 
     const response = await fetch(url, { headers: getAuthHeaders() });
-    
+
     if (!response.ok) throw new Error("Error al obtener cubicaje");
 
     const json = await response.json();
-    
+
     //  la respuesta tiene esta estructura: { status: "success", data: [...] }
     return json.data || [];
   } catch (error) {
@@ -1406,23 +1335,260 @@ export const fetchCubicajePorMaterial = async (inicio, fin) => {
   }
 };
 
+// ====================================================================
+// 🟦 NOTIICACIONES EN EL INICIO
+// ====================================================================
+
+export const fetchNotificaciones = async () => {
+  try {
+    const response = await fetch(`${BASE_URL}/notificaciones`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error("Error al obtener notificaciones");
+    const json = await response.json();
+    return json.status === "success" ? json.data : [];
+  } catch (error) {
+    console.error("Error notificaciones:", error);
+    return [];
+  }
+};
 
 // ====================================================================
-// 🟦 NOTIICACIONES EN EL INICIO 
+// 🛒 CONSULTA DE COMPRAS
 // ====================================================================
 
-  export const fetchNotificaciones = async () => {
-    try {
-      const response = await fetch(`${BASE_URL}/notificaciones`, {
-        headers: getAuthHeaders(),
-      });
-      if (!response.ok) throw new Error("Error al obtener notificaciones");
-      const json = await response.json();
-      return json.status === "success" ? json.data : [];
-    } catch (error) {
-      console.error("Error notificaciones:", error);
+/**
+ * Obtiene todas las órdenes de compra.
+ * Endpoint: GET /ordenes_compra
+ * @returns {Promise<Array>} Array de órdenes de compra
+ */
+export const fetchOrdenesCompra = async () => { // No recomendable
+  try {
+    const response = await fetch(`${BASE_URL_COMPRAS}/ordenes_compra`, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error("Error obteniendo órdenes de compra:", response.status);
       return [];
     }
-  };
 
-  
+    const json = await response.json();
+    return json.status === "success" ? json.data : [];
+  } catch (error) {
+    console.error("Error en fetchOrdenesCompra:", error);
+    return [];
+  }
+};
+
+/**
+ * Búsqueda avanzada de órdenes de compra con múltiples filtros.
+ * Endpoint: GET /ordenes_compra/buscar
+ * @param {object} filtros - Objeto con los filtros de búsqueda
+ * @param {string} filtros.proveedor - Nombre o NIT del proveedor
+ * @param {string} filtros.item - Descripción del item
+ * @param {string} filtros.destino - Destino de la orden
+ * @param {string} filtros.fecha_desde - Fecha inicial (YYYY-MM-DD)
+ * @param {string} filtros.fecha_hasta - Fecha final (YYYY-MM-DD)
+ * @param {string} filtros.estado - Estado de la orden
+ * @param {string} filtros.receptor - Receptor de la orden
+ * @param {number} filtros.limit - Límite de resultados (default: 100)
+ * @param {number} filtros.offset - Desplazamiento para paginación (default: 0)
+ * @returns {Promise<object>} Objeto con status, total, count y data
+ */
+export const buscarOrdenesCompra = async (filtros = {}) => {
+  try {
+    // Construir query params dinámicamente
+    const params = new URLSearchParams();
+
+    if (filtros.proveedor) params.append("proveedor", filtros.proveedor);
+    if (filtros.item) params.append("item", filtros.item);
+    if (filtros.destino) params.append("destino", filtros.destino);
+    if (filtros.fecha_desde) params.append("fecha_desde", filtros.fecha_desde);
+    if (filtros.fecha_hasta) params.append("fecha_hasta", filtros.fecha_hasta);
+    if (filtros.estado) params.append("estado", filtros.estado);
+    if (filtros.receptor) params.append("receptor", filtros.receptor);
+    if (filtros.limit) params.append("limit", filtros.limit);
+    if (filtros.offset) params.append("offset", filtros.offset);
+
+    const url = `${BASE_URL_COMPRAS}/vista-oc-emprecal/buscar?${params.toString()}`;
+
+    const response = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error("Error en búsqueda de órdenes:", response.status);
+      return { status: "error", total: 0, count: 0, data: [] };
+    }
+
+    const json = await response.json();
+    return json;
+  } catch (error) {
+    console.error("Error en buscarOrdenesCompra:", error);
+    return { status: "error", total: 0, count: 0, data: [] };
+  }
+};
+
+/**
+ * Busca órdenes de compra por proveedor (nombre o NIT).
+ * Endpoint: GET /ordenes_compra/proveedor/{proveedor}
+ * @param {string} proveedor - Nombre o NIT del proveedor
+ * @param {number} limit - Límite de resultados (default: 100)
+ * @returns {Promise<Array>} Array de órdenes del proveedor
+ */
+export const fetchOrdenesCompraByProveedor = async (proveedor, limit = 100) => {
+  try {
+    const url = `${BASE_URL_COMPRAS}/ordenes_compra/proveedor/${encodeURIComponent(
+      proveedor
+    )}?limit=${limit}`;
+
+    const response = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error("Error obteniendo órdenes por proveedor:", response.status);
+      return [];
+    }
+
+    const json = await response.json();
+    return json.status === "success" ? json.data : [];
+  } catch (error) {
+    console.error("Error en fetchOrdenesCompraByProveedor:", error);
+    return [];
+  }
+};
+
+/**
+ * Busca órdenes de compra por descripción de item.
+ * Endpoint: GET /ordenes_compra/item/{descripcion}
+ * @param {string} descripcion - Descripción del item
+ * @param {number} limit - Límite de resultados (default: 100)
+ * @returns {Promise<Array>} Array de órdenes que contienen el item
+ */
+export const fetchOrdenesCompraByItem = async (descripcion, limit = 100) => {
+  try {
+    const url = `${BASE_URL_COMPRAS}/ordenes_compra/item/${encodeURIComponent(
+      descripcion
+    )}?limit=${limit}`;
+
+    const response = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error("Error obteniendo órdenes por item:", response.status);
+      return [];
+    }
+
+    const json = await response.json();
+    return json.status === "success" ? json.data : [];
+  } catch (error) {
+    console.error("Error en fetchOrdenesCompraByItem:", error);
+    return [];
+  }
+};
+
+/**
+ * Busca órdenes de compra por destino.
+ * Endpoint: GET /ordenes_compra/destino/{destino}
+ * @param {string} destino - Destino de las órdenes
+ * @param {number} limit - Límite de resultados (default: 100)
+ * @returns {Promise<Array>} Array de órdenes con ese destino
+ */
+export const fetchOrdenesCompraByDestino = async (destino, limit = 100) => {
+  try {
+    const url = `${BASE_URL_COMPRAS}/ordenes_compra/destino/${encodeURIComponent(
+      destino
+    )}?limit=${limit}`;
+
+    const response = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error("Error obteniendo órdenes por destino:", response.status);
+      return [];
+    }
+
+    const json = await response.json();
+    return json.status === "success" ? json.data : [];
+  } catch (error) {
+    console.error("Error en fetchOrdenesCompraByDestino:", error);
+    return [];
+  }
+};
+
+/**
+ * Busca órdenes de compra por rango de fechas.
+ * Endpoint: GET /ordenes_compra/fecha
+ * @param {string} fecha_desde - Fecha inicial (YYYY-MM-DD)
+ * @param {string} fecha_hasta - Fecha final (YYYY-MM-DD)
+ * @param {number} limit - Límite de resultados (default: 100)
+ * @returns {Promise<Array>} Array de órdenes en el rango de fechas
+ */
+export const fetchOrdenesCompraByFecha = async (
+  fecha_desde,
+  fecha_hasta,
+  limit = 100
+) => {
+  try {
+    const params = new URLSearchParams();
+    if (fecha_desde) params.append("fecha_desde", fecha_desde);
+    if (fecha_hasta) params.append("fecha_hasta", fecha_hasta);
+    params.append("limit", limit);
+
+    const url = `${BASE_URL_COMPRAS}/ordenes_compra/fecha?${params.toString()}`;
+
+    const response = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error("Error obteniendo órdenes por fecha:", response.status);
+      return [];
+    }
+
+    const json = await response.json();
+    return json.status === "success" ? json.data : [];
+  } catch (error) {
+    console.error("Error en fetchOrdenesCompraByFecha:", error);
+    return [];
+  }
+};
+
+/**
+ * Obtiene estadísticas de órdenes de compra.
+ * Endpoint: GET /ordenes_compra/estadisticas
+ * @param {string} fecha_desde - Fecha inicial (opcional)
+ * @param {string} fecha_hasta - Fecha final (opcional)
+ * @returns {Promise<Array>} Array con estadísticas por estado
+ */
+export const fetchEstadisticasOrdenesCompra = async (
+  fecha_desde = null,
+  fecha_hasta = null
+) => {
+  try {
+    const params = new URLSearchParams();
+    if (fecha_desde) params.append("fecha_desde", fecha_desde);
+    if (fecha_hasta) params.append("fecha_hasta", fecha_hasta);
+
+    const url = `${BASE_URL_COMPRAS}/ordenes_compra/estadisticas?${params.toString()}`;
+
+    const response = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error("Error obteniendo estadísticas:", response.status);
+      return [];
+    }
+
+    const json = await response.json();
+    return json.status === "success" ? json.data : [];
+  } catch (error) {
+    console.error("Error en fetchEstadisticasOrdenesCompra:", error);
+    return [];
+  }
+};

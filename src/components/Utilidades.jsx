@@ -5,15 +5,15 @@ const Utilidades = ({ setActiveTab }) => {
   const modulos = [
     {
       id: 'reporteCompras',
-      titulo: 'Reporte de Compras',
-      descripcion: 'Visualiza y exporta el historial de adquisiciones.',
+      titulo: 'Reporte de Compras de clientes',
+      descripcion: 'Visualiza y exporta el historial de compras de material por terceros.',
       icon: <BarChart3 size={32} className="text-blue-500" />,
       color: 'hover:border-blue-500'
     },
     {
       id: 'terceros',
       titulo: 'Gestión de Terceros',
-      descripcion: 'Administra conductores, clientes y proveedores.',
+      descripcion: 'Administra conductores, clientes y terceros.',
       icon: <SquareUser size={32} className="text-emerald-500" />,
       color: 'hover:border-emerald-500'
     },
@@ -27,7 +27,7 @@ const Utilidades = ({ setActiveTab }) => {
     {
       id: 'config',
       titulo: 'Configuración',
-      descripcion: 'Ajustes generales del sistema y parámetros.',
+      descripcion: 'Ajustes generales de precios en materiales y tipos de pago.',
       icon: <Settings size={32} className="text-slate-500" />,
       color: 'hover:border-slate-500'
     },
@@ -37,6 +37,13 @@ const Utilidades = ({ setActiveTab }) => {
       descripcion: 'Consulta y analiza los cierres de caja de días anteriores.',
       icon: <FileText size={32} className="text-purple-500" />,
       color: 'hover:border-purple-500'
+    },
+      {
+      id: 'ConsultaCompras',
+      titulo: 'Consulta de Compras de la mina',
+      descripcion: 'Visualiza y exporta el historial de adquisiciones de la mina.',
+      icon: <BarChart3 size={32} className="text-blue-500" />,
+      color: 'hover:border-blue-500'
     },
   ];
 

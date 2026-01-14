@@ -40,7 +40,7 @@ export default function Inicio({
   const [datosApi, setDatosApi] = useState([]);
   const [datosCubicajeApi, setDatosCubicajeApi] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [notificacion, setNotificacion] = useState(null);
+  const [notificaciones, setNotificaciones] = useState([]);
 
   useEffect(() => {
     const cargarGraficas = async () => {
@@ -65,18 +65,22 @@ export default function Inicio({
   }, [fechaInicio, fechaFin]);
 
   useEffect(() => {
-    const cargarNotificacion = async () => {
+    const cargarNotificaciones = async () => {
       try {
         const data = await fetchNotificaciones();
         if (data && data.length > 0) {
-          const activa = data.find((n) => n.activa === 1);
-          setNotificacion(activa);
+          // Filtramos las activas y las ordenamos por fecha (descendente)
+          const activasOrdenadas = data
+            .filter((n) => n.activa === 1)
+            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+          setNotificaciones(activasOrdenadas);
         }
       } catch (error) {
         console.error("Error al cargar notificaciones:", error);
       }
     };
-    cargarNotificacion();
+    cargarNotificaciones();
   }, []);
 
   const stats = useMemo(() => {
@@ -234,12 +238,29 @@ export default function Inicio({
         </div>
       </div>
 
-      {notificacion && (
+      {/* {notificacion && (
         <div className="px-2 animate-bounce-slow">
           {" "}
           <NotificationBanner data={notificacion} />{" "}
         </div>
+      )} */}
+      {/* Sección de Notificaciones */}
+
+      {/* ================================================================================================ */}
+        {/* ---------------------------------NOTIFICACIONES --------------------------------- */}
+      {/* ================================================================================================ */}
+
+      {notificaciones.length > 0 && (
+        <div className="space-y-4 px-2"> 
+          {notificaciones.map((noti, index) => (
+            <div key={noti.id_notificacion || `noti.-${index}`} className="animate-bounce-slow">
+              <NotificationBanner data={noti} />
+            </div>
+          ))}
+        </div>
       )}
+      {/* ================================================================================================ */}
+
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">

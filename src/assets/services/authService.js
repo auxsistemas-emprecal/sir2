@@ -1,7 +1,7 @@
 // ------------------------ ARCHIVO DE AUTENTICACIÓN (authService.js) ------------------------
 // true = modo edicion
 // false = modo real 
-const isDev = false;
+const isDev = true;
 
 const BASE_URL = !isDev
   ? "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev"

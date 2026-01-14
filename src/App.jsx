@@ -31,6 +31,7 @@ import Contabilidad from "./components/Contabilidad.jsx";
 import Inicio from "./components/Inicio.jsx";
 import CuadreRevision from "./components/CuadreRevision.jsx";
 import CuadreCajaDetalles from "./components/CuadreCajaDetalles.jsx";
+import ConsultaCompras from './components/ConsultaCompras';
 
 // Servicios
 import { getToken, logoutUser } from "./assets/services/authService.js";
@@ -263,6 +264,7 @@ export default function App() {
 
   const startEditing = async (movementHeader) => {
     try {
+  
       setEditingMovement(movementHeader);
       setIsEditing(true);
       const itemsData = await fetchMovimientoItemsByRemision(
@@ -616,6 +618,8 @@ export default function App() {
               onBack={() => setActiveTab("CuadreRevision")} 
             />
           )}
+
+          {activeTab === 'ConsultaCompras' && <ConsultaCompras />}
 
         </div>
       </main>

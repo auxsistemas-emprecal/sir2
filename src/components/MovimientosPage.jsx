@@ -305,6 +305,7 @@ export default function MovimientosPage({
 
   const handleEdit = (movimiento) => {
     try {
+   
       onEdit(movimiento);
     } catch (error) {
       console.error("Error al editar:", error);
