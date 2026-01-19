@@ -140,7 +140,7 @@ export default function CuadreCaja() {
       const tipo = obtenerTipoPago(m);
       const total = Number(m.total) || 0;
       if (m.estado !== "ANULADA") {
-        if (tipo === "Efectivo" || tipo === "Pago por anticipado")
+        if (tipo === "Efectivo")
           resumen.Efectivo += total;
         else if (tipo === "Crédito") resumen.Crédito += total;
         else if (tipo === "Transferencia") resumen.Transferencia += total;
