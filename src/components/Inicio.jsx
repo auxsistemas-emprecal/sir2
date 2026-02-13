@@ -7,6 +7,7 @@ import {
 } from "../assets/services/apiService";
 
 import NotificationBanner from "./NotificationBanner";
+import { getUserData } from "../assets/services/authService"; // Ajusta la ruta si es necesario
 
 import {
   TrendingUp,
@@ -26,6 +27,19 @@ export default function Inicio({
   terceros = [],
   setTab,
 }) {
+  // --- LÓGICA DE DATOS Y LIMPIEZA ---
+  // Extraemos el nombre del objeto JSON para evitar que se vea el código técnico en pantalla [cite: 16-01-2026]
+  const nombreLimpio = (() => {
+    try {
+      const user = JSON.parse(localStorage.getItem("usuario"));
+      return user?.nombreUsuario || "Usuario";
+    } catch (e) {
+      // Si el localStorage tiene texto plano
+      return localStorage.getItem("usuario") || "Usuario";
+    }
+  })();
+
+  // --- GESTIÓN DE FECHAS ---
   const hoy = new Date().toISOString().split("T")[0];
   const primerDiaMes = new Date(
     new Date().getFullYear(),
@@ -35,12 +49,40 @@ export default function Inicio({
     .toISOString()
     .split("T")[0];
 
+  // --- ESTADOS DE REACT ---
   const [fechaInicio, setFechaInicio] = useState(primerDiaMes);
   const [fechaFin, setFechaFin] = useState(hoy);
   const [datosApi, setDatosApi] = useState([]);
   const [datosCubicajeApi, setDatosCubicajeApi] = useState([]);
   const [loading, setLoading] = useState(false);
   const [notificaciones, setNotificaciones] = useState([]);
+
+  // export default function Inicio({
+  //   movements = [],
+  //   anticipos = [],
+  //   terceros = [],
+  //   setTab,
+  // }) {
+  //   const hoy = new Date().toISOString().split("T")[0];
+  //   const primerDiaMes = new Date(
+  //     new Date().getFullYear(),
+  //     new Date().getMonth(),
+  //     1,
+  //   )
+  //     .toISOString()
+  //     .split("T")[0];
+
+  //   // saludo personalizado ------------------------
+  //   const userData = getUserData();
+  //   const nombreParaMostrar = userData ? userData.nombreUsuario : "Usuario";
+  //   // ------------------------
+
+  //   const [fechaInicio, setFechaInicio] = useState(primerDiaMes);
+  //   const [fechaFin, setFechaFin] = useState(hoy);
+  //   const [datosApi, setDatosApi] = useState([]);
+  //   const [datosCubicajeApi, setDatosCubicajeApi] = useState([]);
+  //   const [loading, setLoading] = useState(false);
+  //   const [notificaciones, setNotificaciones] = useState([]);
 
   useEffect(() => {
     const cargarGraficas = async () => {
@@ -187,11 +229,7 @@ export default function Inicio({
               Panel de Control Operativo
             </span>
             <h1 className="text-4xl md:text-6xl font-black tracking-tight">
-              ¡Hola,{" "}
-              <span className="text-indigo-400">
-                {localStorage.getItem("usuario") || "Admin"}
-              </span>
-              !
+              ¡Hola, <span className="text-indigo-400">{nombreLimpio}</span>!
             </h1>
 
             <div className="flex flex-wrap items-center gap-4 p-3 bg-slate-800/50 rounded-[2rem] border border-slate-700 w-fit backdrop-blur-sm">
@@ -247,7 +285,7 @@ export default function Inicio({
       {/* Sección de Notificaciones */}
 
       {/* ================================================================================================ */}
-      {/* ---------------------------------NOTIFICACIONES --------------------------------- */}
+      {/* ---------------------------------------NOTIFICACIONES ------------------------------------------ */}
       {/* ================================================================================================ */}
 
       {notificaciones.length > 0 && (

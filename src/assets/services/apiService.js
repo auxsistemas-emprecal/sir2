@@ -6,9 +6,12 @@ const isDev = true;
 
 const BASE_URL = !isDev
   ? "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev"
-  : "http://192.168.150.2:8000";
+  : "http://192.168.150.12:8000";
 
-// const BASE_URL_COMPRAS = "http://192.168.150.5:8001";
+  // http://192.168.150.9:8000 - computador
+  // http://192.168.0.204:8000 - celular
+
+// const BASE_URL_COMPRAS = "http://192.168.150.9:8001";
 const BASE_URL_COMPRAS =
   "https://socpi-auxsistemas-emprecal7067-1pus16u8.leapcell.dev";
 
@@ -22,7 +25,32 @@ const getAuthHeaders = () => {
   };
 };
 
+// ====================================================================
+// 🟨 AUTENTICACIÓN Y SESIÓN
+// ====================================================================
+/**
+ * Verifica la sesión actual consultando al servidor.
+ * @returns {Promise<Object|null>} Datos del usuario o null si no es válido.
+ */
+export const verifySession = async () => {
+  try {
+    const response = await fetch(`${BASE_URL}/me`, {
+      headers: getAuthHeaders(),
+    });
 
+    if (!response.ok) {
+      // Si el token expiró o es falso, el servidor devuelve 401
+      console.warn("Sesión no válida o expirada:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error verificando sesión:", error);
+    return null;
+  }
+};
 
 // ====================================================================
 // 🟩 MOVIMIENTOS
@@ -1173,7 +1201,6 @@ export const createCuadreDiario = async (arqueo) => {
 //   if (!getToken()) {
 //     throw new Error("Autenticación requerida");
 //   }
-  
 
 //   try {
 //     const response = await fetch(`${BASE_URL}/cuadresDiarios/`, {
@@ -1463,6 +1490,26 @@ export const fetchNotificaciones = async () => {
     console.error("Error notificaciones:", error);
     return [];
   }
+};
+
+export const createNotificacion = async (data) => {
+  const response = await fetch(`${BASE_URL}/notificaciones`, {
+    method: "POST",
+    headers: {
+      ...getAuthHeaders(), // Esto debe incluir el Bearer token si existe
+      "Content-Type": "application/json",
+      Accept: "application/json", // Esto ayuda a que el servidor responda con errores claros
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    // Intentamos capturar el error detallado del servidor
+    const errorData = await response.json();
+    console.error("Detalle del error 422:", errorData);
+    throw new Error(errorData.message || "Error al crear la notificación");
+  }
+  return await response.json();
 };
 
 // ====================================================================
@@ -1861,6 +1908,225 @@ export const deletePlaqueta = async (id) => {
     return await response.json();
   } catch (error) {
     console.error("Error en deletePlaqueta:", error);
+    return null;
+  }
+};
+//===================================================================================================
+//------------------------------------ Archivos de Contabilidad -------------------------------------
+//===================================================================================================
+
+/**
+ * Obtiene el reporte detallado de contabilidad entre dos fechas.
+ * Endpoint: GET /contabilidad/reporte-detallado
+ * @param {string} inicio - Fecha inicial (YYYY-MM-DD)
+ * @param {string} fin - Fecha final (YYYY-MM-DD)
+ * @returns {Promise<Array>} Array de objetos con el detalle de remisiones e ítems.
+ */
+export const fetchReporteDetalladoContabilidad = async (inicio, fin) => {
+  try {
+    // Construcción de la URL con parámetros de búsqueda
+    const url = `${BASE_URL}/contabilidad/reporte-detallado?fecha_inicial=${inicio}&fecha_final=${fin}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getAuthHeaders(), // Reutiliza tus headers con Token
+    });
+
+    if (!response.ok) {
+      console.error(
+        `Error ${response.status} al obtener reporte contable detallado`,
+      );
+      return [];
+    }
+
+    const json = await response.json();
+
+    // Validamos que la respuesta contenga la propiedad "data" y sea un array
+    return Array.isArray(json.data) ? json.data : [];
+  } catch (error) {
+    console.error("Error en fetchReporteDetalladoContabilidad:", error);
+    return [];
+  }
+};
+
+//===================================================================================================
+//---------------------------------- Historial de Observaciones (obsDB) -----------------------------
+//===================================================================================================
+
+/**
+ * Obtiene todos los registros de la bitácora de auditoría.
+ * Ajustado a la ruta Swagger: /observaciones/observaciones/
+ */
+export const fetchHistorialObservaciones = async () => {
+  try {
+    // Agregamos el prefijo doble detectado en tu Swagger
+    const url = `${BASE_URL}/observaciones/observaciones/`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error(`Error ${response.status} en la ruta ${url}`);
+      return [];
+    }
+
+    const json = await response.json();
+    // Validamos si FastAPI devuelve la lista directamente o dentro de .data
+    return Array.isArray(json) ? json : json.data || [];
+  } catch (error) {
+    console.error("Error en fetchHistorialObservaciones:", error);
+    return [];
+  }
+};
+
+export const createObservacion = async (observacion) => {
+  try {
+    // Convertimos N_remision a número para evitar el error 422
+    const dataAEnviar = {
+      ...observacion,
+      N_remision: parseInt(observacion.N_remision) || 0,
+    };
+
+    const response = await fetch(`${BASE_URL}/observaciones/observaciones/`, {
+      method: "POST",
+      headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(dataAEnviar),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Detalle del error 422:", errorData);
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error en createObservacion:", error);
+    return null;
+  }
+};
+
+/**
+ * PUT: Actualiza una observación existente.
+ * Basado en el endpoint: /observaciones/observaciones/{obs_id}
+ */
+export const updateObservacion = async (id, data) => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/observaciones/observaciones/${id}`,
+      {
+        method: "PUT",
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      },
+    );
+
+    if (!response.ok) throw new Error(`Error ${response.status} al actualizar`);
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error en updateObservacion:", error);
+    return null;
+  }
+};
+
+/**
+ * DELETE: Elimina un registro de la bitácora.
+ * Basado en el endpoint: /observaciones/observaciones/{obs_id}
+ */
+export const deleteObservacion = async (id) => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/observaciones/observaciones/${id}`,
+      {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      },
+    );
+
+    if (!response.ok) {
+      console.error(`Error ${response.status} al eliminar registro ${id}`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error en deleteObservacion:", error);
+    return false;
+  }
+};
+
+//===================================================================================================
+//------------------------------------- FIRMA PARA REMISION (base64) --------------------------------
+//===================================================================================================
+
+export const fetchFirma = async () => {
+  try {
+    // Agregamos el prefijo doble detectado en tu Swagger
+    const url = `${BASE_URL}/firmas`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error(`Error ${response.status} en la ruta ${url}`);
+      return [];
+    }
+
+    const json = await response.json();
+    // Validamos si FastAPI devuelve la lista directamente o dentro de .data
+    return Array.isArray(json) ? json : json.data || [];
+  } catch (error) {
+    console.error("Error en fetchFirma:", error);
+    return [];
+  }
+};
+
+//===========================================================
+//---------------------------- firmas/actualizar
+//==========================================================
+export const updateFirma = async (firma) => {
+  try {
+    const response = await fetch(`${BASE_URL}/firmas/actualizar`, {
+      method: "PUT",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(firma),
+    });
+
+    if (!response.ok) throw new Error(`Error ${response.status} al actualizar`);
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error en updateFirma:", error);
+    return null;
+  }
+};
+
+export const updateFirmaLimpiar = async () => {
+  try {
+    const response = await fetch(`${BASE_URL}/firmas/limpiar`, {
+      method: "PUT",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) throw new Error(`Error ${response.status} al actualizar`);
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error en updateFirma:", error);
     return null;
   }
 };

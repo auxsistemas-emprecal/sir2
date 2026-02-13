@@ -1,0 +1,30 @@
+@keyframes loading {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+@keyframes progress-flow {
+  0% {
+    transform: translateX(-120%) scaleX(0.5);
+  }
+  50% {
+    transform: translateX(50%) scaleX(1.2); /* Se estira en el medio */
+  }
+  100% {
+    transform: translateX(300%) scaleX(0.5);
+  }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-progress-flow {
+  /* Duración de 1.5s para que se sienta ágil */
+  animation: progress-flow 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 0.8s infinite;
+}

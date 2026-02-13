@@ -33,6 +33,10 @@ import CuadreRevision from "./components/CuadreRevision.jsx";
 import CuadreCajaDetalles from "./components/CuadreCajaDetalles.jsx";
 import ConsultaCompras from "./components/ConsultaCompras";
 import Plaquetas from "./components/Plaquetas.jsx";
+import ArchivosContabilidad from "./components/ArchivosContabilidad.jsx";
+import ChatNotificaciones from "./components/ChatNotificaciones.jsx";
+import HistorialObservaciones from "./components/HistorialObservaciones.jsx";
+import FirmaCliente from "./components/FirmaCliente.jsx";
 
 // Servicios
 import { getToken, logoutUser } from "./assets/services/authService.js";
@@ -74,8 +78,20 @@ export default function App() {
   const [terceros, setTerceros] = useState([]);
   const [reloadAnticipos, setReloadAnticipos] = useState(0);
   const [creditos, setCreditos] = useState([]);
-  // Dentro de tu función App
   const [cuadreSeleccionado, setCuadreSeleccionado] = useState(null);
+
+  const rawUser = localStorage.getItem("usuario");
+  let userObj = {};
+  try {
+    userObj =
+      rawUser && rawUser.startsWith("{")
+        ? JSON.parse(rawUser)
+        : { nombre: rawUser || "invitado" };
+  } catch (error) {
+    userObj = { nombre: rawUser || "invitado" };
+  }
+  const userRole = userObj.rol || "invitado";
+  // ---------------------------------------
 
   // 🆕 ESTADO PARA ESTADÍSTICAS DE INICIO
   const [stats, setStats] = useState({
@@ -593,8 +609,16 @@ export default function App() {
             <Utilidades setActiveTab={setActiveTab} />
           )}
 
-          {/* NUEVO: Registro de Plaquetas */}
+          {activeTab === "archivosContabilidad" && (
+            <ArchivosContabilidad
+              movements={movements}
+              onRefresh={loadMovimientos}
+            />
+          )}
+
           {activeTab === "plaquetas" && <Plaquetas />}
+
+          {activeTab === "chatNotificaciones" && <ChatNotificaciones />}
 
           {activeTab === "terceros" && (
             <Terceros data={terceros} setData={setTerceros} />
@@ -630,6 +654,21 @@ export default function App() {
           )}
 
           {activeTab === "ConsultaCompras" && <ConsultaCompras />}
+
+          {activeTab === "HistorialObservaciones" &&
+            (userRole === "admin" ? (
+              <HistorialObservaciones
+                onBack={() => setActiveTab("utilidades")}
+              />
+            ) : (
+              <div className="p-10 text-center text-red-500 font-bold">
+                Acceso Denegado
+              </div>
+            ))}
+
+          {activeTab === "FirmaCliente" && (
+            <FirmaCliente onBack={() => setActiveTab("utilidades")} />
+          )}
         </div>
       </main>
     </div>

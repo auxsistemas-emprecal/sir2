@@ -162,7 +162,7 @@ export default function Sidebar({
 
       {/* FOOTER */}
       <div className="p-4 text-xs text-slate-500 text-center shrink-0">
-        Versión 1.2.1
+        Versión 28.22.21.1
       </div>
     </aside>
   );

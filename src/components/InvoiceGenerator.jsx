@@ -3,7 +3,16 @@
 import React, { useState, useEffect } from "react";
 import LogoEmprecal from "../assets/services/img/Estrategia-comercial.png";
 
-import { Save, Printer, FileText, PlusCircle, XCircle } from "lucide-react";
+import {
+  Save,
+  Printer,
+  FileText,
+  PlusCircle,
+  XCircle,
+  Trash2,
+  PenTool,
+  Eraser,
+} from "lucide-react";
 import InputGroup from "./InputGroup";
 import InputAutosuggest from "../components/InputAutosuggest";
 import { createMovimiento } from "../assets/services/apiService";
@@ -26,6 +35,8 @@ import {
   searchTerceroById,
   buscarPlacasPorFiltro,
   fetchPlacas,
+  fetchFirma,
+  updateFirmaLimpiar,
 } from "../assets/services/apiService";
 
 // --- CLAVE DE PERSISTENCIA (PONER AQUÍ) ---
@@ -47,7 +58,7 @@ const Modal = ({
     <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6 space-y-4">
         <h3 className="text-xl font-bold text-gray-800">{title}</h3>
-        <p className="text-gray-600">{message}</p>
+        <div className="text-gray-600">{message}</div>
         <div className="flex justify-end space-x-3">
           <button
             onClick={onCancel}
@@ -98,12 +109,12 @@ export default function InvoiceGenerator({
   setActiveTab,
   // isSaving,
 }) {
-  const [nextRemisionNumber, setNextRemisionNumber] = useState(null);
-
-  const defaultPaymentType =
-    paymentTypes.length > 0
-      ? paymentTypes[0]
-      : { tipo_pago: "", idTipoPago: null, name: "" };
+  useEffect(() => {
+    (async () => {
+      const firma = await fetchFirma();
+      console.log("FIRMA RECUPERADA:", firma);
+    })();
+  }, []);
 
   // Función auxiliar para obtener fecha y hora en zona horaria de Colombia
   const getColombiaDateParts = (dateString) => {
@@ -143,17 +154,12 @@ export default function InvoiceGenerator({
     cubica: "",
     incluirIva: false,
     incluirRet: false,
-    tipoPago: "", // Cambiado: antes decía paymentTypes[0]... o "Efectivo"
+    tipoPago: "",
     idTipoPago: null,
-    // tipoPago:
-    //   paymentTypes.length > 0
-    //     ? paymentTypes[0].tipo_pago ?? paymentTypes[0].name
-    //     : "Efectivo",
-    // idTipoPago: paymentTypes.length > 0 ? paymentTypes[0].idTipoPago ?? 1 : 1, // <--- 🛑 NUEVO: Para guardar el ID del tipo de pago
     observacion: "",
     horaLlegada: initialDateParts.hora,
     horaSalida: "",
-    // --- NUEVOS CAMPOS DE PESAJE ---
+    // CAMPOS DE PESAJE ---
     usarPesaje: false,
     pesoEntrada: 0,
     pesoSalida: 0,
@@ -185,26 +191,43 @@ export default function InvoiceGenerator({
     ];
   };
 
-  // const [formData, setFormData] = useState(initialFormData);
-  const [formData, setFormData] = useState(() => {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  console.log("Intentando recuperar del storage:", saved);
-  if (saved) {
-    const parsed = JSON.parse(saved);
-    // IMPORTANTE: Retornamos el objeto formData que viene dentro del JSON
-    return parsed.formData; 
-  }
-  return initialFormData;
+  // Definimos los valores frescos de hoy afuera para usarlos en el estado
+  const ahora = new Date();
+  const fechaHoy = ahora.toISOString().split("T")[0];
+  const horaActual = ahora.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
   });
-  // const [lineItems, setLineItems] = useState(initialLineItems);
-const [lineItems, setLineItems] = useState(() => {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    const parsed = JSON.parse(saved);
-    return parsed.lineItems;
-  }
-  return initialLineItems();
-});
+
+  const [formData, setFormData] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    console.log("Intentando recuperar del storage:", saved);
+
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Retornamos el borrador pero FORZAMOS fecha y hora de hoy
+      return {
+        ...parsed.formData,
+        fecha: fechaHoy, // <--- Actualiza a hoy
+        horaLlegada: horaActual, // <--- Actualiza a ahora
+      };
+    }
+    // Si no hay nada, cargamos initialFormData pero también con fecha/hora actualizadas
+    return {
+      ...initialFormData,
+      fecha: fechaHoy,
+      horaLlegada: horaActual,
+    };
+  });
+
+  const [lineItems, setLineItems] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return parsed.lineItems;
+    }
+    return initialLineItems();
+  });
 
   const [calculos, setCalculos] = useState({
     subtotal: 0,
@@ -212,7 +235,9 @@ const [lineItems, setLineItems] = useState(() => {
     retencion: 0,
     total: 0,
   });
+
   const [showIVARet, setShowIVARet] = useState(true);
+
   const [estadoDeCuenta, setEstadoDeCuenta] = useState({
     no_ingreso: 0,
     valorAnticipo: 0,
@@ -221,6 +246,12 @@ const [lineItems, setLineItems] = useState(() => {
     valorRemisiones: 0,
     saldo: 0,
   });
+
+  const [showClearModal, setShowClearModal] = useState(false);
+
+  //---------------------------------------------------------------------------------
+  //---------------------------- BUSCADOR DE PLACAS ---------------------------------
+  //---------------------------------------------------------------------------------
 
   const [sugerenciasPlacas, setSugerenciasPlacas] = useState([]);
 
@@ -264,187 +295,113 @@ const [lineItems, setLineItems] = useState(() => {
       return nuevoEstado;
     });
   };
+
   //=====================================================================================
   //                                EDITAR
   //======================================================================================
-  // useEffect(() => {
-  //   (async () => {
-  //     // 1. Verificar que estamos en modo edición y que los datos existen
-  //     if (editingMovement && editingItems?.data) {
-  //       const responseMovimiento = await fetchMovimiento(
-  //         editingMovement.remision,
-  //       );
-
-  //       let cubicajeRecuperado = "";
-  //       try {
-  //         const terceros = await searchTercero(editingMovement.tercero);
-  //         const elTercero = terceros.find(
-  //           (t) => t.nombre === editingMovement.tercero,
-  //         );
-  //         if (elTercero) cubicajeRecuperado = elTercero.cubica;
-  //       } catch (e) {
-  //         console.error("Error recuperando cubicaje", e);
-  //       }
-
-
-// useEffect(() => {
-//   (async () => {
-//     if (editingMovement && editingItems?.data) {
-//       const responseMovimiento = await fetchMovimiento(editingMovement.remision);
-//       let cubicajeFinal = editingMovement.cubica || editingMovement.cubicaje;
-//       if (!cubicajeFinal) {
-//         try {
-//           const terceros = await searchTercero(editingMovement.tercero);
-//           const elTercero = terceros.find(t => t.nombre === editingMovement.tercero);
-//           if (elTercero) cubicajeFinal = elTercero.cubica;
-//         } catch (e) {
-//           console.error("Error recuperando cubicaje", e);
-//         }
-//       }
-//         // -----------------------------------------------------------
-//         // A. Inicializar la Cabecera (formData) Editar
-//         // -----------------------------------------------------------
-//         if (!isEditing) return;
-
-//         setFormData(() => {
-//           const { fecha, hora } = getColombiaDateParts(editingMovement.fecha);
-//           const toReturn = {
-//             // Mantenemos las claves de la cabecera que vienen de la prop
-//             ...editingMovement,
-
-//             // Mapeo de valores si es necesario.
-//             idTercero: parseInt(responseMovimiento.idTercero),
-//             idTipoPago: parseInt(responseMovimiento.idTipoPago),
-//             incluirIva: Boolean(editingMovement.incluir_iva),
-//             incluirRet: Boolean(editingMovement.incluir_ret),
-//             fecha: fecha,
-//             horaLlegada: hora,
-//             tipoPago: editingMovement.tipo_pago,
-//             cubica: cubicajeFinal,
-
-//             pesoEntrada: Number(editingMovement.pesoEntrada) || 0,
-//             pesoSalida: Number(editingMovement.pesoSalida) || 0,
-//             pesoNeto: Number(editingMovement.pesoNeto) || 0,
-
-//             usarPesaje:
-//               Number(editingMovement.pesoEntrada) > 0 ||
-//               Number(editingMovement.pesoSalida) > 0,
-//             // Si tiene un campo 'date', asegúrese de que el formato sea el correcto para el input.
-//           };
-//           return toReturn;
-//         });
-//         fetchPagosPorNombre(editingMovement.tercero).then((resp) => {
-//           setPagosAnticipados(resp);
-//         });
-//         // -----------------------------------------------------------
-//         // B. Inicializar los Ítems (lineItems) - CORREGIDO
-//         // -----------------------------------------------------------
-//         const mappedItems = editingItems.data.map((item) => {
-//           // Buscamos el material en la lista maestra para recuperar su nombre/descripción
-//           const materialInfo = materials.find(
-//             (m) => m.idMaterial === item.idMaterial,
-//           );
-
-//           return {
-//             ...item,
-//             // Mantenemos el ID
-//             idMaterial: item.idMaterial,
-
-//             // Pasamos a String para los inputs
-//             cantidad: String(item.cantidad),
-//             precioUnitario: String(item.precioUnitario),
-
-//             nombre_material:
-//               item.nombre_material ||
-//               item.descripcion ||
-//               materialInfo?.nombre_material ||
-//               "",
-//             descripcion:
-//               item.descripcion ||
-//               item.nombre_material ||
-//               materialInfo?.nombre_material ||
-//               "",
-//           };
-//         });
-
-//         setLineItems(mappedItems);
-//       } else {
-//         setFormData(initialFormData);
-//         setLineItems([]);
-//       }
-//     })();
-//   }, [editingMovement, editingItems]);
+  const modalStyles = isEditing
+    ? {
+        headerClass: "bg-amber-500 text-black py-6 animate-pulse", // Naranja vibrante con pulso
+        icon: "⚠️",
+        iconSize: "text-5xl",
+        containerClass: "border-4 border-amber-500 shadow-2xl",
+        buttonClass:
+          "bg-amber-600 hover:bg-amber-700 text-white text-xl px-8 py-3 font-black",
+        borderColor: "border-l-8 border-amber-600",
+        titleText: "¡ATENCIÓN: MODIFICANDO REGISTRO!",
+      }
+    : {
+        headerClass: "bg-green-600 text-white py-4",
+        icon: "💾",
+        iconSize: "text-3xl",
+        containerClass: "border-none shadow-lg",
+        buttonClass: "bg-green-700 hover:bg-green-800 text-white",
+        borderColor: "border-l-8 border-green-600",
+        titleText: "Confirmar Registro",
+      };
 
   useEffect(() => {
-  (async () => {
-    // CASO A: ESTAMOS EDITANDO UN REGISTRO EXISTENTE
-    if (editingMovement && editingItems?.data) {
-      const responseMovimiento = await fetchMovimiento(editingMovement.remision);
-      let cubicajeFinal = editingMovement.cubica || editingMovement.cubicaje;
-      
-      if (!cubicajeFinal) {
-        try {
-          const terceros = await searchTercero(editingMovement.tercero);
-          const elTercero = terceros.find(t => t.nombre === editingMovement.tercero);
-          if (elTercero) cubicajeFinal = elTercero.cubica;
-        } catch (e) {
-          console.error("Error recuperando cubicaje", e);
+    (async () => {
+      // CASO A: ESTAMOS EDITANDO UN REGISTRO EXISTENTE
+      if (editingMovement && editingItems?.data) {
+        const responseMovimiento = await fetchMovimiento(
+          editingMovement.remision,
+        );
+        let cubicajeFinal = editingMovement.cubica || editingMovement.cubicaje;
+
+        if (!cubicajeFinal) {
+          try {
+            const terceros = await searchTercero(editingMovement.tercero);
+            const elTercero = terceros.find(
+              (t) => t.nombre === editingMovement.tercero,
+            );
+            if (elTercero) cubicajeFinal = elTercero.cubica;
+          } catch (e) {
+            console.error("Error recuperando cubicaje", e);
+          }
         }
+
+        if (!isEditing) return;
+
+        setFormData({
+          ...editingMovement,
+          idTercero: parseInt(responseMovimiento.idTercero),
+          idTipoPago: parseInt(responseMovimiento.idTipoPago),
+          incluirIva: Boolean(editingMovement.incluir_iva),
+          incluirRet: Boolean(editingMovement.incluir_ret),
+          fecha: getColombiaDateParts(editingMovement.fecha).fecha,
+          horaLlegada: getColombiaDateParts(editingMovement.fecha).hora,
+          tipoPago: editingMovement.tipo_pago,
+          cubica: cubicajeFinal,
+          pesoEntrada: Number(editingMovement.pesoEntrada) || 0,
+          pesoSalida: Number(editingMovement.pesoSalida) || 0,
+          pesoNeto: Number(editingMovement.pesoNeto) || 0,
+          usarPesaje:
+            Number(editingMovement.pesoEntrada) > 0 ||
+            Number(editingMovement.pesoSalida) > 0,
+        });
+
+        fetchPagosPorNombre(editingMovement.tercero).then((resp) => {
+          setPagosAnticipados(resp);
+        });
+
+        const mappedItems = editingItems.data.map((item) => {
+          const materialInfo = materials.find(
+            (m) => m.idMaterial === item.idMaterial,
+          );
+          return {
+            ...item,
+            idMaterial: item.idMaterial,
+            cantidad: String(item.cantidad),
+            precioUnitario: String(item.precioUnitario),
+            nombre_material:
+              item.nombre_material ||
+              item.descripcion ||
+              materialInfo?.nombre_material ||
+              "",
+            descripcion:
+              item.descripcion ||
+              item.nombre_material ||
+              materialInfo?.nombre_material ||
+              "",
+          };
+        });
+
+        setLineItems(mappedItems);
       }
-
-      if (!isEditing) return;
-
-      setFormData({
-        ...editingMovement,
-        idTercero: parseInt(responseMovimiento.idTercero),
-        idTipoPago: parseInt(responseMovimiento.idTipoPago),
-        incluirIva: Boolean(editingMovement.incluir_iva),
-        incluirRet: Boolean(editingMovement.incluir_ret),
-        fecha: getColombiaDateParts(editingMovement.fecha).fecha,
-        horaLlegada: getColombiaDateParts(editingMovement.fecha).hora,
-        tipoPago: editingMovement.tipo_pago,
-        cubica: cubicajeFinal,
-        pesoEntrada: Number(editingMovement.pesoEntrada) || 0,
-        pesoSalida: Number(editingMovement.pesoSalida) || 0,
-        pesoNeto: Number(editingMovement.pesoNeto) || 0,
-        usarPesaje: Number(editingMovement.pesoEntrada) > 0 || Number(editingMovement.pesoSalida) > 0,
-      });
-
-      fetchPagosPorNombre(editingMovement.tercero).then((resp) => {
-        setPagosAnticipados(resp);
-      });
-
-      const mappedItems = editingItems.data.map((item) => {
-        const materialInfo = materials.find((m) => m.idMaterial === item.idMaterial);
-        return {
-          ...item,
-          idMaterial: item.idMaterial,
-          cantidad: String(item.cantidad),
-          precioUnitario: String(item.precioUnitario),
-          nombre_material: item.nombre_material || item.descripcion || materialInfo?.nombre_material || "",
-          descripcion: item.descripcion || item.nombre_material || materialInfo?.nombre_material || "",
-        };
-      });
-
-      setLineItems(mappedItems);
-
-    } 
-    // CASO B: ES UN REGISTRO NUEVO
-    else {
-      // REVISAMOS SI HAY PERSISTENCIA ANTES DE BORRAR
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) {
-        // Solo si NO hay nada guardado, ponemos los valores en blanco
-        setFormData(initialFormData);
-        setLineItems(initialLineItems());
+      // CASO B: ES UN REGISTRO NUEVO
+      else {
+        // REVISAMOS SI HAY PERSISTENCIA ANTES DE BORRAR
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) {
+          // Solo si NO hay nada guardado, ponemos los valores en blanco
+          setFormData(initialFormData);
+          setLineItems(initialLineItems());
+        }
+        // Si "saved" existe, no hacemos nada aquí porque el useState inicial ya los cargó
       }
-      // Si "saved" existe, no hacemos nada aquí porque el useState inicial ya los cargó
-    }
-  })();
-}, [editingMovement, editingItems]);
-
-
-
+    })();
+  }, [editingMovement, editingItems]);
 
   // si cambia la lista de materials, actualizamos la primer línea si estaba vacía
   useEffect(() => {
@@ -510,17 +467,9 @@ const [lineItems, setLineItems] = useState(() => {
       pagoOriginal: selectedPago,
     }));
   }, [pagosAnticipados]);
-
-//   useEffect(() => {
-//   // Solo guardamos si no estamos editando un registro viejo 
-//   // y si no hemos terminado de guardar el actual.
-//   if (!isEditing && !lastSavedRecord) {
-//     localStorage.setItem(STORAGE_KEY, JSON.stringify({ formData, lineItems }));
-//   }
-// }, [formData, lineItems, isEditing, lastSavedRecord]);
-
+  // Persistencia en localStorage
   useEffect(() => {
-    // Solo guardamos si no estamos editando algo viejo de la DB
+    // Solo guardamos si no estamos editando
     // y si no hemos acabado de guardar la remisión actual
     if (!isEditing && !lastSavedRecord) {
       const dataToSave = { formData, lineItems };
@@ -531,7 +480,7 @@ const [lineItems, setLineItems] = useState(() => {
   const handleChange = (e) => {
     const { name, value, type, checked, completeObject } = e.target;
 
-    // 1. Lógica para el Tercero (InputAutosuggest)
+    //  Lógica para el Tercero (InputAutosuggest)
     if (name == "tercero" && typeof completeObject == "object") {
       setFormData((prev) => ({
         ...prev,
@@ -612,6 +561,7 @@ const [lineItems, setLineItems] = useState(() => {
       [name]: type === "checkbox" ? checked : value,
     }));
   };
+
   // =================================================================================================================
   //                                                  Manejador de cambios
   // =================================================================================================================
@@ -748,7 +698,7 @@ const [lineItems, setLineItems] = useState(() => {
       return;
     }
 
-    // 2. Abrir el modal de confirmación
+    //  Abrir el modal de confirmación
     setShowModal(true);
   };
 
@@ -779,8 +729,9 @@ const [lineItems, setLineItems] = useState(() => {
     }
     return cambios;
   }
+
   //====================================================================================================================
-  // --- FUNCIONES DE GUARDADO Y FORMATO (FUNCIONALIDAD ORIGINAL PRESERVADA) ---
+  // --- FUNCIONES DE GUARDADO Y FORMATO  ---
   //====================================================================================================================
 
   const formatCurrency = (val) =>
@@ -976,76 +927,197 @@ const [lineItems, setLineItems] = useState(() => {
       });
 
       localStorage.removeItem(STORAGE_KEY);
-
     } catch (error) {
       console.error("Fallo al guardar:", error);
-      alert(`❌ Error al guardar por falta de (cubicaje, material y/o cantidad): ${error.message}`);
+      alert(
+        `❌ Error al guardar por falta de (cubicaje, material y/o cantidad): ${error.message}`,
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
+  //====================================================================================================================
+  //----- función para nuevo registro -----
   const handleNewRecord = () => {
-    if (!confirm("¿Estás seguro de que deseas borrar todos los datos del formulario actual?")) {
-    return;
-  }
     const currentParts = getColombiaDateParts();
-    setFormData((prev) => ({
+
+    //Resetear el formulario al estado inicial
+    setFormData({
       ...initialFormData,
-      remision: 0,
+      remision: 0, // Para que no sobrescriba registros viejos
       fecha: currentParts.fecha,
       horaLlegada: currentParts.hora,
-    }));
+    });
+
+    // Limpiar imagen de firma al iniciar un nuevo registro
+    setSignatureImage(null);
+
+    // SALIR DEL MODO EDICIÓN
+    if (setIsEditing) {
+      setIsEditing(false);
+    }
+
+    // Limpiar tablas y cálculos
     setLineItems(initialLineItems);
     setCalculos({ subtotal: 0, iva: 0, retencion: 0, total: 0 });
     setLastSavedRecord(null);
 
+    // Limpiar persistencia local
     localStorage.removeItem(STORAGE_KEY);
   };
 
-// --- VISTA PREVIA (CORREGIDA PARA EDICIÓN Y CONSULTA) ---
-const previewData = lastSavedRecord 
-  ? { 
-      ...lastSavedRecord, 
-      cubica: lastSavedRecord.cubica || formData.cubica,
-      materiales: lastSavedRecord.materiales || lineItems 
-    }
-  : {
-      ...formData,
-      cubica: formData.cubica, 
-      materiales: lineItems,
-      ...calculos,
-    };
+  //====================================================================================================================
+  // --- VISTA PREVIA (CORREGIDA PARA EDICIÓN Y CONSULTA) ---
+  const previewData = lastSavedRecord
+    ? {
+        ...lastSavedRecord,
+        cubica: lastSavedRecord.cubica || formData.cubica,
+        materiales: lastSavedRecord.materiales || lineItems,
+      }
+    : {
+        ...formData,
+        cubica: formData.cubica,
+        materiales: lineItems,
+        ...calculos,
+      };
+  //=====================================================================================================
+  //-------------------------------------- FIRMA DEL TERCERO --------------------------------------------
+  //=====================================================================================================
 
-  // // --- VISTA PREVIA (PRESERVADA Y CORREGIDA) ---
-  // const previewData = lastSavedRecord
-  //   ? { ...lastSavedRecord, cubica: lastSavedRecord.cubica }
-  //   : {
-  //       ...formData,
-  //       cubica: formData.cubica, // No procesa el número para evitar redondeos
-  //       materiales: lineItems,
-  //       ...calculos,
-  //     };
+  const [signatureImage, setSignatureImage] = useState(null);
+
+  const handleLoadSignature = async () => {
+    try {
+      const data = await fetchFirma();
+      if (data && data.length > 0) {
+        setSignatureImage(data[0].firma);
+      } else {
+        alert("No se encontró una firma guardada.");
+      }
+    } catch (error) {
+      console.error("Error al cargar la firma:", error);
+    }
+  };
 
   //====================================================================================================================
-  ///todo lo estetico
+  //----------------------------------------------------- todo lo estetico ---------------------------------------------
+  //====================================================================================================================
 
   return (
     <div className="max-w-full mx-auto p-2 md:p-4 lg:p-6">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-8 items-start">
-        {/* 1. MODAL DE CONFIRMACIÓN */}
         <Modal
           show={showModal}
-          title="Confirmar Registro"
-          message={`¿Estás seguro de que la Remisión ha sido diligenciada correctamente y deseas guardarla?`}
           onConfirm={handleConfirmSave}
           onCancel={() => setShowModal(false)}
-          confirmText="Confirmar Guardado"
-          cancelText="Revisar"
+          confirmText={isEditing ? "SÍ, ACTUALIZAR DATOS" : "GUARDAR REGISTRO"}
+          cancelText="VOLVER A REVISAR"
+        >
+          {/* Cabecera personalizada de alto impacto */}
+          <div
+            className={`${modalStyles.headerClass} text-center rounded-t-lg`}
+          >
+            <div className={`${modalStyles.iconSize} mb-2`}>
+              {modalStyles.icon}
+            </div>
+            <h2 className="text-3xl font-black uppercase tracking-tighter">
+              {modalStyles.titleText}
+            </h2>
+          </div>
+
+          {/* Cuerpo del Modal con mayor tamaño */}
+          <div className={`p-8 ${modalStyles.borderColor} bg-white`}>
+            <p className="text-2xl text-gray-800 font-semibold leading-tight">
+              {isEditing
+                ? "Estás a punto de SOBRESCRIBIR la información de esta remisión. Esta acción modificará los datos permanentes en la base de datos."
+                : "¿La información es correcta? Se creará un nuevo folio en el sistema."}
+            </p>
+
+            {isEditing && (
+              <div className="mt-6 p-4 bg-amber-100 rounded-lg border border-amber-300">
+                <p className="text-amber-800 font-bold text-center">
+                  EDITANDO REGISTRO UNIFICADO:{" "}
+                  {formData.nombres_apellidos?.nombre || "ID: " + formData.id}
+                </p>
+              </div>
+            )}
+          </div>
+        </Modal>
+
+        {/* MODAL DE CONFIRMACIÓN */}
+        <Modal
+          show={showModal}
+          title={
+            <div className="flex items-center gap-2">
+              <span>{modalStyles.icon}</span>
+              <span>
+                {isEditing ? "MODO EDICIÓN: ACTUALIZAR" : "NUEVO REGISTRO"}
+              </span>
+            </div>
+          }
+          message={
+            <div
+              className={`p-4 ${modalStyles.borderColor} bg-gray-50 rounded-r-lg`}
+            >
+              <p className="font-medium text-gray-800">
+                {isEditing
+                  ? "Atención: Estás modificando una remisión existente. Los datos anteriores serán reemplazados."
+                  : "¿Deseas guardar esta nueva remisión en la base de datos?"}
+              </p>
+              {isEditing && (
+                <p className="text-xs text-blue-600 mt-2 uppercase font-bold">
+                  ID de Remisión: {formData.id}
+                </p>
+              )}
+            </div>
+          }
+          onConfirm={handleConfirmSave}
+          onCancel={() => setShowModal(false)}
+          confirmText={isEditing ? "ACTUALIZAR AHORA" : "GUARDAR REGISTRO"}
+          cancelText="CANCELAR"
+          // Si tu componente Modal acepta clases personalizadas:
+          confirmBtnClass={modalStyles.buttonClass}
         />
 
-        {/* FORMULARIO */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden xl:sticky xl:top-4">
+        {/*  MODAL (LIMPIAR) */}
+        <Modal
+          show={showClearModal}
+          title="¿Reiniciar formulario?"
+          message="Se perderán todos los datos ingresados en esta remisión. Esta acción no se puede deshacer."
+          onConfirm={() => {
+            handleNewRecord();
+            setShowClearModal(false);
+          }}
+          onCancel={() => setShowClearModal(false)}
+          confirmText="Sí, limpiar todo"
+          cancelText="Continuar editando"
+        />
+
+        {/* FORMULARIO PRINCIPAL */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden xl:sticky xl:top-4 relative">
+          {/* BARRA DE CARGA DINÁMICA DE ALTO IMPACTO */}
+          {isLoading && (
+            <div className="absolute top-0 left-0 w-full h-1.5 z-50 overflow-hidden bg-slate-100/50 backdrop-blur-xs">
+              <div
+                className="h-full animate-progress-flow relative"
+                style={{
+                  width: "40%",
+                  background: isEditing
+                    ? "linear-gradient(90deg, transparent, #2563eb, #60a5fa, #ffffff, #60a5fa, #2563eb, transparent)"
+                    : "linear-gradient(90deg, transparent, #10b981, #34d399, #ffffff, #34d399, #10b981, transparent)",
+                  boxShadow: isEditing
+                    ? "0 0 20px rgba(37, 99, 235, 0.6), 0 0 10px rgba(96, 165, 250, 0.4)"
+                    : "0 0 20px rgba(16, 185, 129, 0.6), 0 0 10px rgba(52, 211, 153, 0.4)",
+                }}
+              >
+                {/* Reflejo de luz que recorre la barra internamente */}
+                <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/50 to-transparent animate-shimmer"></div>
+              </div>
+            </div>
+          )}
+
+          {/* ENCABEZADO CON BOTÓN INTEGRADO */}
           <div className="bg-linear-to-r from-gray-50 to-white px-4 py-4 md:px-6 border-b border-gray-200 flex flex-wrap justify-between items-center gap-2">
             <h2 className="text-base md:text-lg font-bold text-gray-700 flex items-center gap-2">
               <FileText size={18} className="text-emerald-600" />
@@ -1056,6 +1128,20 @@ const previewData = lastSavedRecord
                 </span>
               )}
             </h2>
+
+            <button
+              type="button"
+              onClick={() => setShowClearModal(true)}
+              className="group flex items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-red-500 hover:text-white bg-white hover:bg-red-500 border border-red-100 hover:border-red-500 rounded-xl transition-all duration-300 shadow-sm"
+            >
+              <XCircle
+                size={16}
+                className="transition-transform duration-1000 group-hover:rotate-180"
+              />
+              <span>
+                {editingMovement ? "Cancelar Edición" : "Limpiar Formulario"}
+              </span>
+            </button>
           </div>
 
           <div className="p-4 md:p-6 space-y-5">
@@ -1146,6 +1232,9 @@ const previewData = lastSavedRecord
                                 ...prev,
                                 placa: item.placa,
                                 cubica: item.cubica,
+                                conductor: item.conductor,
+                                direccion: item.direccion,
+                                telefono: item.telefono,
                               }));
                               setSugerenciasPlacas([]);
                             }}
@@ -1161,20 +1250,20 @@ const previewData = lastSavedRecord
                       </ul>
                     )}
                   </div>
-                                  
-                {/* CAMPO CUBICAJE (EDITABLE SI ES NECESARIO) */}
+
+                  {/* CAMPO CUBICAJE (EDITABLE SI ES NECESARIO) */}
                   <InputGroup
                     label="Cubicaje"
                     name="cubica"
-                    type="number" // Aseguramos que sea numérico
-                    step="0.01"   // Para permitir decimales como 7.43
+                    type="number"
+                    step="0.01" // Para decimales
                     value={formData.cubica}
-                    onChange={handleChange} // Ahora sí permitimos el cambio manual
+                    onChange={handleChange} //Cambios manual
                     placeholder="0.00"
-                    className={formData.cubica ? "bg-blue-50" : "bg-white"} // Cambia de color si ya tiene dato
+                    className={formData.cubica ? "bg-blue-50" : "bg-white"}
                   />
                 </div>
-                                  
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="md:col-span-2">
                     <InputGroup
@@ -1259,7 +1348,7 @@ const previewData = lastSavedRecord
                   {formData.usarPesaje && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4 p-4 bg-white rounded-md border border-blue-100 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                       <InputGroup
-                        label="Peso Entrada (kg)"
+                        label="Peso Entr.(kg)"
                         name="pesoEntrada"
                         type="number"
                         value={formData.pesoEntrada}
@@ -1276,7 +1365,7 @@ const previewData = lastSavedRecord
                       />
                       <div className="flex flex-col">
                         <label className="font-bold text-xs uppercase text-green-700 mb-1 tracking-tight">
-                          Peso Neto (Material)
+                          Peso Neto
                         </label>
                         <div className="relative">
                           <input
@@ -1567,12 +1656,12 @@ const previewData = lastSavedRecord
                 <button
                   onClick={handleAttemptSave}
                   disabled={isLoading}
-                  className={`w-full text-white font-bold py-4 px-4 rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer mt-4 ${
+                  className={`w-full text-white font-bold py-4 px-4 rounded-lg shadow-lg flex items-center justify-center gap-2 cursor-pointer mt-4 transition-all duration-300 ease-out group active:scale-95 ${
                     isLoading
                       ? "bg-gray-400 cursor-not-allowed"
                       : isEditing
-                        ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
-                        : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
+                        ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200 hover:shadow-blue-400 hover:-translate-y-1"
+                        : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 hover:shadow-emerald-400 hover:-translate-y-1"
                   }`}
                 >
                   {isLoading ? (
@@ -1597,12 +1686,15 @@ const previewData = lastSavedRecord
                           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                         ></path>
                       </svg>
-                      <span>PROCESANDO...</span>
+                      <span className="tracking-widest">PROCESANDO...</span>
                     </>
                   ) : (
                     <>
-                      <Save size={20} />
-                      <span>
+                      <Save
+                        size={20}
+                        className="transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12"
+                      />
+                      <span className="tracking-tight">
                         {isEditing ? "GUARDAR CAMBIOS" : "GUARDAR REMISIÓN"}
                       </span>
                     </>
@@ -1610,16 +1702,6 @@ const previewData = lastSavedRecord
                 </button>
               </>
             )}
-            {/* Botón para Limpiar Persistencia / Nuevo Registro */}
-            <button
-              type="button"
-              onClick={handleNewRecord}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-700 transition-colors shadow-md"
-              title="Borrar borrador y empezar de nuevo"
-            >
-              <XCircle size={20} />
-              Limpiar Formulario
-            </button>
           </div>
         </div>
         {/*=============================================================================================*/}
@@ -1903,12 +1985,58 @@ const previewData = lastSavedRecord
                   <span className="italic">{previewData.observacion}</span>
                 </div>
 
-                <div className="w-full mt-12 flex items-center gap-4 max-w-[400px]">
-                  <p className="font-bold uppercase tracking-wide whitespace-nowrap text-xs">
-                    Firma tercero:
-                  </p>
-                  <div className="flex-1 border-t-2 border-black"></div>
+                {/* ------------------------------------------------------ */}
+                {/* SECCIÓN DE FIRMA: REDISEÑO ESTÉTICO */}
+                <div className="mt-8 flex justify-between items-end">
+                  <div className="text-center w-64 group">
+                    {/* Contenedor de la rúbrica con línea estilizada */}
+                    <div className="border-b-2 border-slate-900 mb-2 relative h-16 flex items-center justify-center transition-colors duration-300 group-hover:border-blue-500">
+                      {signatureImage ? (
+                        <img
+                          src={signatureImage}
+                          alt="Firma"
+                          /* La firma ahora tiene un ligero efecto de elevación sobre la línea */
+                          className="max-h-16 object-contain absolute bottom-1 transition-transform duration-300 group-hover:scale-110"
+                        />
+                      ) : (
+                        /* Placeholder visual elegante cuando no hay firma */
+                        <span className="text-slate-300 text-[9px] uppercase tracking-[0.2em] font-black opacity-40 select-none">
+                          FIRMA TERCERO
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Etiqueta del Tercero con mejor tipografía */}
+                    <p className="font-black text-[10px] text-slate-800 uppercase tracking-widest">
+                      FIRMA TERCERO
+                    </p>
+
+                    {/* BOTÓN REESTILIZADO: Se eliminó el azul genérico por uno con profundidad y gradiente */}
+                    <button
+                      onClick={handleLoadSignature}
+                      className="no-print mt-4 inline-flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-300 cursor-pointer shadow-lg shadow-slate-200 hover:shadow-blue-200 active:scale-95 border border-slate-700/50"
+                    >
+                      <PenTool size={14} className="opacity-80" />
+                      <span className="text-[11px] font-black uppercase tracking-tight">
+                        Cargar Firma
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        await updateFirmaLimpiar();
+                        await handleLoadSignature();
+                      }} // Asegúrate de que esta sea la función correcta para borrar
+                      className="no-print mt-4 inline-flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white rounded-xl transition-all duration-300 cursor-pointer shadow-lg shadow-red-100 hover:shadow-red-200 active:scale-95 border border-red-500/50"
+                    >
+                      <Eraser size={14} className="opacity-90" />
+                      <span className="text-[11px] font-black uppercase tracking-tight">
+                        Limpiar firma
+                      </span>
+                    </button>
+                  </div>
                 </div>
+                {/* --------------------------------------------- */}
               </div>
             </div>
           </div>

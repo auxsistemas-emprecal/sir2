@@ -107,6 +107,10 @@
   #credit-print button:not(#btn-pagado-remision) {
     display: none !important;
   }
+  .no-print {
+    display: none !important;
+  }
+
 }
 
 /* Utility: ocultar scrollbar */

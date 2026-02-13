@@ -181,7 +181,7 @@ export default function CuadreCaja() {
 
   const handleArqueoChange = async (key, value) => {
     const numValue = value === "" ? 0 : Number(value);
-    setArqueo({ ...arqueo, [key]: numValue });
+    setArqueo({ ...arqueo, [key]: value });
     const campo =
       key !== "monedas" ? `billete_${key / 1000}k` : "monedas_total";
     const camposId = {
@@ -658,7 +658,8 @@ export default function CuadreCaja() {
                       type="number"
                       value={arqueo[den]}
                       onChange={(e) => handleArqueoChange(den, e.target.value)}
-                      className="w-20 text-center border-slate-200 rounded-lg font-bold text-blue-600"
+                      className="w-20 text-center border-slate-200 rounded-lg font-bold text-blue-600 bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
+                      onWheel={(e) => e.currentTarget.blur()}
                     />
                     <span className="w-24 text-right text-xs font-black text-slate-400">
                       ${(den * arqueo[den]).toLocaleString()}
