@@ -5,7 +5,7 @@ const isDev = true;
 
 const BASE_URL = !isDev
   ? "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev"
-  : "http://192.168.150.5:8000";
+  : "http://192.168.150.2:8000";
 
 const LOGIN_URL = `${BASE_URL}/auth/token`;
 
@@ -56,3 +56,4 @@ export const getAuthHeaders = () => ({
   "Content-Type": "application/json",
   Authorization: `Bearer ${getToken()}`,
 });
+

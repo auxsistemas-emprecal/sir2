@@ -21,7 +21,15 @@ import {
   updateCredito,
   fetchCreditosPorNombre,
   fetchPreciosEspecialesPorTercero,
+  createTercero,
+  updateTercero,
+  searchTerceroById,
+  buscarPlacasPorFiltro,
+  fetchPlacas,
 } from "../assets/services/apiService";
+
+// --- CLAVE DE PERSISTENCIA (PONER AQUÍ) ---
+const STORAGE_KEY = "remision_pendiente";
 
 // --- Nuevo Componente: Modal de Confirmación ---
 const Modal = ({
@@ -96,10 +104,6 @@ export default function InvoiceGenerator({
     paymentTypes.length > 0
       ? paymentTypes[0]
       : { tipo_pago: "", idTipoPago: null, name: "" };
-  // const defaultPaymentType =
-  //   paymentTypes.length > 0
-  //     ? paymentTypes[0]
-  //     : { tipo_pago: "Efectivo", idTipoPago: 1, name: "Efectivo" };
 
   // Función auxiliar para obtener fecha y hora en zona horaria de Colombia
   const getColombiaDateParts = (dateString) => {
@@ -181,8 +185,27 @@ export default function InvoiceGenerator({
     ];
   };
 
-  const [formData, setFormData] = useState(initialFormData);
-  const [lineItems, setLineItems] = useState(initialLineItems);
+  // const [formData, setFormData] = useState(initialFormData);
+  const [formData, setFormData] = useState(() => {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  console.log("Intentando recuperar del storage:", saved);
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    // IMPORTANTE: Retornamos el objeto formData que viene dentro del JSON
+    return parsed.formData; 
+  }
+  return initialFormData;
+  });
+  // const [lineItems, setLineItems] = useState(initialLineItems);
+const [lineItems, setLineItems] = useState(() => {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    return parsed.lineItems;
+  }
+  return initialLineItems();
+});
+
   const [calculos, setCalculos] = useState({
     subtotal: 0,
     iva: 0,
@@ -199,6 +222,17 @@ export default function InvoiceGenerator({
     saldo: 0,
   });
 
+  const [sugerenciasPlacas, setSugerenciasPlacas] = useState([]);
+
+  const handleSearchPlaca = async (busqueda) => {
+    if (busqueda.length >= 1) {
+      // Empieza a buscar desde 1 carácter
+      const resultados = await buscarPlacasPorFiltro(busqueda);
+      setSugerenciasPlacas(resultados);
+    } else {
+      setSugerenciasPlacas([]);
+    }
+  };
   //---------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------
 
@@ -224,7 +258,7 @@ export default function InvoiceGenerator({
       // Math.max asegura que si la entrada es mayor a la salida, el neto sea 0 y no un número negativo
       nuevoEstado.pesoNeto = Math.max(
         0,
-        nuevoEstado.pesoSalida - nuevoEstado.pesoEntrada
+        nuevoEstado.pesoSalida - nuevoEstado.pesoEntrada,
       );
 
       return nuevoEstado;
@@ -233,114 +267,184 @@ export default function InvoiceGenerator({
   //=====================================================================================
   //                                EDITAR
   //======================================================================================
+  // useEffect(() => {
+  //   (async () => {
+  //     // 1. Verificar que estamos en modo edición y que los datos existen
+  //     if (editingMovement && editingItems?.data) {
+  //       const responseMovimiento = await fetchMovimiento(
+  //         editingMovement.remision,
+  //       );
+
+  //       let cubicajeRecuperado = "";
+  //       try {
+  //         const terceros = await searchTercero(editingMovement.tercero);
+  //         const elTercero = terceros.find(
+  //           (t) => t.nombre === editingMovement.tercero,
+  //         );
+  //         if (elTercero) cubicajeRecuperado = elTercero.cubica;
+  //       } catch (e) {
+  //         console.error("Error recuperando cubicaje", e);
+  //       }
+
+
+// useEffect(() => {
+//   (async () => {
+//     if (editingMovement && editingItems?.data) {
+//       const responseMovimiento = await fetchMovimiento(editingMovement.remision);
+//       let cubicajeFinal = editingMovement.cubica || editingMovement.cubicaje;
+//       if (!cubicajeFinal) {
+//         try {
+//           const terceros = await searchTercero(editingMovement.tercero);
+//           const elTercero = terceros.find(t => t.nombre === editingMovement.tercero);
+//           if (elTercero) cubicajeFinal = elTercero.cubica;
+//         } catch (e) {
+//           console.error("Error recuperando cubicaje", e);
+//         }
+//       }
+//         // -----------------------------------------------------------
+//         // A. Inicializar la Cabecera (formData) Editar
+//         // -----------------------------------------------------------
+//         if (!isEditing) return;
+
+//         setFormData(() => {
+//           const { fecha, hora } = getColombiaDateParts(editingMovement.fecha);
+//           const toReturn = {
+//             // Mantenemos las claves de la cabecera que vienen de la prop
+//             ...editingMovement,
+
+//             // Mapeo de valores si es necesario.
+//             idTercero: parseInt(responseMovimiento.idTercero),
+//             idTipoPago: parseInt(responseMovimiento.idTipoPago),
+//             incluirIva: Boolean(editingMovement.incluir_iva),
+//             incluirRet: Boolean(editingMovement.incluir_ret),
+//             fecha: fecha,
+//             horaLlegada: hora,
+//             tipoPago: editingMovement.tipo_pago,
+//             cubica: cubicajeFinal,
+
+//             pesoEntrada: Number(editingMovement.pesoEntrada) || 0,
+//             pesoSalida: Number(editingMovement.pesoSalida) || 0,
+//             pesoNeto: Number(editingMovement.pesoNeto) || 0,
+
+//             usarPesaje:
+//               Number(editingMovement.pesoEntrada) > 0 ||
+//               Number(editingMovement.pesoSalida) > 0,
+//             // Si tiene un campo 'date', asegúrese de que el formato sea el correcto para el input.
+//           };
+//           return toReturn;
+//         });
+//         fetchPagosPorNombre(editingMovement.tercero).then((resp) => {
+//           setPagosAnticipados(resp);
+//         });
+//         // -----------------------------------------------------------
+//         // B. Inicializar los Ítems (lineItems) - CORREGIDO
+//         // -----------------------------------------------------------
+//         const mappedItems = editingItems.data.map((item) => {
+//           // Buscamos el material en la lista maestra para recuperar su nombre/descripción
+//           const materialInfo = materials.find(
+//             (m) => m.idMaterial === item.idMaterial,
+//           );
+
+//           return {
+//             ...item,
+//             // Mantenemos el ID
+//             idMaterial: item.idMaterial,
+
+//             // Pasamos a String para los inputs
+//             cantidad: String(item.cantidad),
+//             precioUnitario: String(item.precioUnitario),
+
+//             nombre_material:
+//               item.nombre_material ||
+//               item.descripcion ||
+//               materialInfo?.nombre_material ||
+//               "",
+//             descripcion:
+//               item.descripcion ||
+//               item.nombre_material ||
+//               materialInfo?.nombre_material ||
+//               "",
+//           };
+//         });
+
+//         setLineItems(mappedItems);
+//       } else {
+//         setFormData(initialFormData);
+//         setLineItems([]);
+//       }
+//     })();
+//   }, [editingMovement, editingItems]);
+
   useEffect(() => {
-    (async () => {
-      // 1. Verificar que estamos en modo edición y que los datos existen
-      if (editingMovement && editingItems?.data) {
-        const responseMovimiento = await fetchMovimiento(
-          editingMovement.remision
-        );
-        // if (editingMovement && editingItems.data.length > 0) {
-        //   console.log(
-        //     "Modo Edición: Inicializando formulario con datos compartidos."
-        //   );
-
-        // const responseMovimiento = await fetchMovimiento(
-        //   editingMovement.remision
-        // );
-
-        let cubicajeRecuperado = "";
+  (async () => {
+    // CASO A: ESTAMOS EDITANDO UN REGISTRO EXISTENTE
+    if (editingMovement && editingItems?.data) {
+      const responseMovimiento = await fetchMovimiento(editingMovement.remision);
+      let cubicajeFinal = editingMovement.cubica || editingMovement.cubicaje;
+      
+      if (!cubicajeFinal) {
         try {
           const terceros = await searchTercero(editingMovement.tercero);
-          const elTercero = terceros.find(
-            (t) => t.nombre === editingMovement.tercero
-          );
-          if (elTercero) cubicajeRecuperado = elTercero.cubica;
+          const elTercero = terceros.find(t => t.nombre === editingMovement.tercero);
+          if (elTercero) cubicajeFinal = elTercero.cubica;
         } catch (e) {
           console.error("Error recuperando cubicaje", e);
         }
-
-        // -----------------------------------------------------------
-        // A. Inicializar la Cabecera (formData) Editar
-        // -----------------------------------------------------------
-        if (!isEditing) return;
-
-        setFormData(() => {
-          const { fecha, hora } = getColombiaDateParts(editingMovement.fecha);
-          const toReturn = {
-            // Mantenemos las claves de la cabecera que vienen de la prop
-            ...editingMovement,
-
-            // Mapeo de valores si es necesario.
-            idTercero: parseInt(responseMovimiento.idTercero),
-            idTipoPago: parseInt(responseMovimiento.idTipoPago),
-            incluirIva: Boolean(editingMovement.incluir_iva),
-            incluirRet: Boolean(editingMovement.incluir_ret),
-            fecha: fecha,
-            horaLlegada: hora,
-            tipoPago: editingMovement.tipo_pago,
-            cubica: cubicajeRecuperado,
-
-            pesoEntrada: Number(editingMovement.pesoEntrada) || 0,
-            pesoSalida: Number(editingMovement.pesoSalida) || 0,
-            pesoNeto: Number(editingMovement.pesoNeto) || 0,
-
-            usarPesaje:
-              Number(editingMovement.pesoEntrada) > 0 ||
-              Number(editingMovement.pesoSalida) > 0,
-            // Si tiene un campo 'date', asegúrese de que el formato sea el correcto para el input.
-          };
-          console.log(editingMovement);
-          return toReturn;
-        });
-        fetchPagosPorNombre(editingMovement.tercero).then((resp) => {
-          console.log(
-            `Pagos anticipados del tercero: ${editingMovement.tercero}`,
-            resp
-          );
-          setPagosAnticipados(resp);
-        });
-        // -----------------------------------------------------------
-        // B. Inicializar los Ítems (lineItems) - CORREGIDO
-        // -----------------------------------------------------------
-        const mappedItems = editingItems.data.map((item) => {
-          // Buscamos el material en la lista maestra para recuperar su nombre/descripción
-          const materialInfo = materials.find(
-            (m) => m.idMaterial === item.idMaterial
-          );
-
-          return {
-            ...item,
-            // Mantenemos el ID
-            idMaterial: item.idMaterial,
-
-            // Pasamos a String para los inputs
-            cantidad: String(item.cantidad),
-            precioUnitario: String(item.precioUnitario),
-
-            // RECUPERAMOS EL NOMBRE:
-            // 1. Intentamos con lo que viene del servidor (nombre_material o descripcion)
-            // 2. Si no viene, lo buscamos en la lista maestra 'materials' por el ID
-            nombre_material:
-              item.nombre_material ||
-              item.descripcion ||
-              materialInfo?.nombre_material ||
-              "",
-            descripcion:
-              item.descripcion ||
-              item.nombre_material ||
-              materialInfo?.nombre_material ||
-              "",
-          };
-        });
-
-        setLineItems(mappedItems);
-      } else {
-        setFormData(initialFormData);
-        setLineItems([]);
       }
-    })();
-  }, [editingMovement, editingItems]);
+
+      if (!isEditing) return;
+
+      setFormData({
+        ...editingMovement,
+        idTercero: parseInt(responseMovimiento.idTercero),
+        idTipoPago: parseInt(responseMovimiento.idTipoPago),
+        incluirIva: Boolean(editingMovement.incluir_iva),
+        incluirRet: Boolean(editingMovement.incluir_ret),
+        fecha: getColombiaDateParts(editingMovement.fecha).fecha,
+        horaLlegada: getColombiaDateParts(editingMovement.fecha).hora,
+        tipoPago: editingMovement.tipo_pago,
+        cubica: cubicajeFinal,
+        pesoEntrada: Number(editingMovement.pesoEntrada) || 0,
+        pesoSalida: Number(editingMovement.pesoSalida) || 0,
+        pesoNeto: Number(editingMovement.pesoNeto) || 0,
+        usarPesaje: Number(editingMovement.pesoEntrada) > 0 || Number(editingMovement.pesoSalida) > 0,
+      });
+
+      fetchPagosPorNombre(editingMovement.tercero).then((resp) => {
+        setPagosAnticipados(resp);
+      });
+
+      const mappedItems = editingItems.data.map((item) => {
+        const materialInfo = materials.find((m) => m.idMaterial === item.idMaterial);
+        return {
+          ...item,
+          idMaterial: item.idMaterial,
+          cantidad: String(item.cantidad),
+          precioUnitario: String(item.precioUnitario),
+          nombre_material: item.nombre_material || item.descripcion || materialInfo?.nombre_material || "",
+          descripcion: item.descripcion || item.nombre_material || materialInfo?.nombre_material || "",
+        };
+      });
+
+      setLineItems(mappedItems);
+
+    } 
+    // CASO B: ES UN REGISTRO NUEVO
+    else {
+      // REVISAMOS SI HAY PERSISTENCIA ANTES DE BORRAR
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) {
+        // Solo si NO hay nada guardado, ponemos los valores en blanco
+        setFormData(initialFormData);
+        setLineItems(initialLineItems());
+      }
+      // Si "saved" existe, no hacemos nada aquí porque el useState inicial ya los cargó
+    }
+  })();
+}, [editingMovement, editingItems]);
+
+
+
 
   // si cambia la lista de materials, actualizamos la primer línea si estaba vacía
   useEffect(() => {
@@ -391,9 +495,8 @@ export default function InvoiceGenerator({
 
   useEffect(() => {
     const selectedPago = pagosAnticipados.find((p) =>
-      eval(p.remisiones).includes(formData.remision)
+      eval(p.remisiones).includes(formData.remision),
     );
-    console.log("Pago seleccionado: ", selectedPago);
     setEstadoDeCuenta((prev) => ({
       ...prev,
       no_ingreso: selectedPago ? selectedPago.no_ingreso : 0,
@@ -407,6 +510,23 @@ export default function InvoiceGenerator({
       pagoOriginal: selectedPago,
     }));
   }, [pagosAnticipados]);
+
+//   useEffect(() => {
+//   // Solo guardamos si no estamos editando un registro viejo 
+//   // y si no hemos terminado de guardar el actual.
+//   if (!isEditing && !lastSavedRecord) {
+//     localStorage.setItem(STORAGE_KEY, JSON.stringify({ formData, lineItems }));
+//   }
+// }, [formData, lineItems, isEditing, lastSavedRecord]);
+
+  useEffect(() => {
+    // Solo guardamos si no estamos editando algo viejo de la DB
+    // y si no hemos acabado de guardar la remisión actual
+    if (!isEditing && !lastSavedRecord) {
+      const dataToSave = { formData, lineItems };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+    }
+  }, [formData, lineItems, isEditing, lastSavedRecord]);
 
   const handleChange = (e) => {
     const { name, value, type, checked, completeObject } = e.target;
@@ -425,7 +545,6 @@ export default function InvoiceGenerator({
         cubica: completeObject.cubica,
       }));
       fetchPagosPorNombre(completeObject.nombre).then((resp) => {
-        console.log("Pagos anticipados del tercero:", resp);
         setPagosAnticipados(resp);
       });
       const oldMaterials = { ...materials };
@@ -453,15 +572,12 @@ export default function InvoiceGenerator({
       // Si el valor es vacío (la opción por defecto), limpiamos y salimos
       if (value === "") {
         setFormData((prev) => ({ ...prev, tipoPago: "", idTipoPago: null }));
-        console.log("Pago seleccionado: Nulo (Opción por defecto)");
         return;
       }
 
       const selectedPayment = paymentTypes.find(
-        (p) => (p.tipo_pago || p.name) === value
+        (p) => (p.tipo_pago || p.name) === value,
       );
-
-      console.log("Pago seleccionado:", selectedPayment); // Ya no será undefined
 
       setFormData((prev) => ({
         ...prev,
@@ -471,14 +587,13 @@ export default function InvoiceGenerator({
       return;
     }
 
-
     // Lógica si es pago anticipado
     if (name === "no_ingreso") {
       if (isEditing) return;
       const selectedPago = pagosAnticipados.find(
-        (p) => p.no_ingreso.toString() === value
+        (p) => p.no_ingreso.toString() === value,
       );
-      console.log("Pago seleccionado: ", selectedPago);
+
       setEstadoDeCuenta((prev) => ({
         ...prev,
         no_ingreso: selectedPago ? selectedPago.no_ingreso : 0,
@@ -498,7 +613,7 @@ export default function InvoiceGenerator({
     }));
   };
   // =================================================================================================================
-  //                                                  original
+  //                                                  Manejador de cambios
   // =================================================================================================================
 
   // cambios en una fila (line item)
@@ -518,7 +633,7 @@ export default function InvoiceGenerator({
               let materialPE = [];
               if (preciosEspeciales.length > 0) {
                 materialPE = preciosEspeciales.filter(
-                  (el) => el.nombre_material === nombreMaterialSelected
+                  (el) => el.nombre_material === nombreMaterialSelected,
                 );
                 setMaterials((prevMaterials) => {
                   const newMaterials = prevMaterials.map((mat) => {
@@ -530,7 +645,6 @@ export default function InvoiceGenerator({
                     }
                     return mat;
                   });
-                  console.log(newMaterials);
                   return newMaterials;
                 });
               }
@@ -551,7 +665,7 @@ export default function InvoiceGenerator({
               const id_tercero_material =
                 formData.idTercero + "_" + selected.idMaterial;
               const materialPE = preciosEspeciales.filter(
-                (el) => el.id_tercero_material === id_tercero_material
+                (el) => el.id_tercero_material === id_tercero_material,
               );
               return {
                 ...li,
@@ -574,7 +688,7 @@ export default function InvoiceGenerator({
         }
 
         return { ...li, [field]: value };
-      })
+      }),
     );
   };
 
@@ -587,7 +701,7 @@ export default function InvoiceGenerator({
       idMaterial: materials.length > 0 ? materials[0].idMaterial : null,
       nombre_material: materials.length > 0 ? materials[0].nombre_material : "",
       cantidad: 0,
-      precioUnitario: materials.length > 0 ? materials[0].precio ?? 0 : 0,
+      precioUnitario: materials.length > 0 ? (materials[0].precio ?? 0) : 0,
     };
     setLineItems((prev) => [...prev, newLine]);
   };
@@ -611,7 +725,7 @@ export default function InvoiceGenerator({
 
     // 1. Validaciones básicas
     const anyCantidad = lineItems.some(
-      (li) => (parseFloat(li.cantidad) || 0) > 0
+      (li) => (parseFloat(li.cantidad) || 0) > 0,
     );
     const checkSaldo = estadoDeCuenta.valorRemision > estadoDeCuenta.saldo;
 
@@ -622,14 +736,14 @@ export default function InvoiceGenerator({
 
     if (!formData.tercero || !anyCantidad) {
       alert(
-        "Asegúrate de ingresar Cliente/Tercero y al menos una Cantidad mayor a 0."
+        "Asegúrate de ingresar Cliente/Tercero y al menos una Cantidad mayor a 0.",
       );
       return;
     }
 
     if (formData.tipoPago === "Pago por anticipado" && checkSaldo) {
       alert(
-        "El Cliente no cuenta con saldo suficiente para hacer esta remisión."
+        "El Cliente no cuenta con saldo suficiente para hacer esta remisión.",
       );
       return;
     }
@@ -641,7 +755,7 @@ export default function InvoiceGenerator({
   function compararDatos(
     datosOriginales = {},
     datosModificados = {},
-    usuario = ""
+    usuario = "",
   ) {
     const ahora = new Date().toLocaleString("es-CO", {
       timeZone: "America/Bogota",
@@ -687,12 +801,12 @@ export default function InvoiceGenerator({
 
       // 1. Crear fecha combinada localmente (Lógica Original)
       const fechaLocal = new Date(
-        `${formData.fecha}T${formData.horaLlegada}:00`
+        `${formData.fecha}T${formData.horaLlegada}:00`,
       );
 
       // 2. Restar el offset de la zona horaria (Lógica Original)
       const fechaISO = new Date(
-        fechaLocal.getTime() - fechaLocal.getTimezoneOffset() * 60000
+        fechaLocal.getTime() - fechaLocal.getTimezoneOffset() * 60000,
       ).toISOString();
 
       let remisionLastNumber = await fetchLastRemisionNumber();
@@ -702,7 +816,7 @@ export default function InvoiceGenerator({
       let estadoDeCuentaPayload = null;
       if (formData.tipoPago === "Pago por anticipado") {
         estadoDeCuentaPayload = await fetchPagosPorNoIngreso(
-          estadoDeCuenta.no_ingreso
+          estadoDeCuenta.no_ingreso,
         );
         estadoDeCuentaPayload = estadoDeCuentaPayload[0];
         let remisionesArray = eval(estadoDeCuentaPayload.remisiones);
@@ -737,7 +851,7 @@ export default function InvoiceGenerator({
         remision: remisionLastNumber,
         idTercero: formData.idTercero ? parseInt(formData.idTercero) : 0,
         idTipoPago: formData.idTipoPago,
-        placa: formData.placa || "",
+        placa: formData.placa,
 
         // 🟩 CAMPOS DE PESAJE
         pesoEntrada: formData.usarPesaje ? Number(formData.pesoEntrada) : 0,
@@ -807,15 +921,44 @@ export default function InvoiceGenerator({
         if (estadoDeCuentaPayload)
           await updatePago(
             estadoDeCuentaPayload.no_ingreso,
-            estadoDeCuentaPayload
+            estadoDeCuentaPayload,
           );
         if (creditoActualizarPayload)
           await updateCredito(
             creditoActualizarPayload.idCredito,
-            creditoActualizarPayload
+            creditoActualizarPayload,
           );
       } else {
         const responseSaved = await onSave(payloadHeader, lineItems);
+        // Creación del tercero si no existe
+        console.log(payloadHeader);
+        const originalTecero = await searchTerceroById(payloadHeader.idTercero);
+        if (originalTecero[0].placa !== payloadHeader.placa) {
+          const nuevoTerceroPayload = {
+            nombre: payloadHeader.tercero,
+            cedula: payloadHeader.cedula,
+            telefono: payloadHeader.telefono,
+            placa: payloadHeader.placa,
+            cubica: payloadHeader.cubicaje,
+            conductor: payloadHeader.conductor,
+            direccion: payloadHeader.direccion,
+          };
+          createTercero(nuevoTerceroPayload);
+        } else if (originalTecero[0].cubica !== payloadHeader.cubicaje) {
+          const nuevoTerceroPayload = {
+            idTercero: payloadHeader.idTercero,
+            nombre: payloadHeader.tercero,
+            cedula: payloadHeader.cedula,
+            telefono: payloadHeader.telefono,
+            placa: payloadHeader.placa,
+            cubica: payloadHeader.cubicaje,
+            conductor: payloadHeader.conductor,
+            direccion: payloadHeader.direccion,
+          };
+          updateTercero(nuevoTerceroPayload.idTercero, nuevoTerceroPayload);
+        }
+
+        // - --------------------------------
         setFormData({
           ...payloadHeader,
           cubica: totalCubicaje,
@@ -831,36 +974,58 @@ export default function InvoiceGenerator({
         cubica: totalCubicaje,
         materiales: lineItems,
       });
+
+      localStorage.removeItem(STORAGE_KEY);
+
     } catch (error) {
       console.error("Fallo al guardar:", error);
-      alert(`❌ Error al guardar: ${error.message}`);
+      alert(`❌ Error al guardar por falta de (cubicaje, material y/o cantidad): ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleNewRecord = () => {
+    if (!confirm("¿Estás seguro de que deseas borrar todos los datos del formulario actual?")) {
+    return;
+  }
     const currentParts = getColombiaDateParts();
     setFormData((prev) => ({
       ...initialFormData,
-      remision: prev.remision,
+      remision: 0,
       fecha: currentParts.fecha,
       horaLlegada: currentParts.hora,
     }));
     setLineItems(initialLineItems);
     setCalculos({ subtotal: 0, iva: 0, retencion: 0, total: 0 });
     setLastSavedRecord(null);
+
+    localStorage.removeItem(STORAGE_KEY);
   };
 
-  // --- VISTA PREVIA (PRESERVADA Y CORREGIDA) ---
-  const previewData = lastSavedRecord
-    ? { ...lastSavedRecord, cubica: lastSavedRecord.cubica }
-    : {
-        ...formData,
-        cubica: formData.cubica, // No procesa el número para evitar redondeos
-        materiales: lineItems,
-        ...calculos,
-      };
+// --- VISTA PREVIA (CORREGIDA PARA EDICIÓN Y CONSULTA) ---
+const previewData = lastSavedRecord 
+  ? { 
+      ...lastSavedRecord, 
+      cubica: lastSavedRecord.cubica || formData.cubica,
+      materiales: lastSavedRecord.materiales || lineItems 
+    }
+  : {
+      ...formData,
+      cubica: formData.cubica, 
+      materiales: lineItems,
+      ...calculos,
+    };
+
+  // // --- VISTA PREVIA (PRESERVADA Y CORREGIDA) ---
+  // const previewData = lastSavedRecord
+  //   ? { ...lastSavedRecord, cubica: lastSavedRecord.cubica }
+  //   : {
+  //       ...formData,
+  //       cubica: formData.cubica, // No procesa el número para evitar redondeos
+  //       materiales: lineItems,
+  //       ...calculos,
+  //     };
 
   //====================================================================================================================
   ///todo lo estetico
@@ -938,7 +1103,8 @@ export default function InvoiceGenerator({
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Cliente ocupa ancho completo */}
+                <div className="grid grid-cols-1 gap-4">
                   <InputAutosuggest
                     label="Cliente / Tercero"
                     name="tercero"
@@ -948,14 +1114,67 @@ export default function InvoiceGenerator({
                     textSuggestor="nombre"
                     keyItems="id_tercero"
                   />
-                  <InputGroup
-                    label="Placa Vehículo"
-                    name="placa"
-                    value={formData.placa}
-                    onChange={(e) => handleChange(e)}
-                  />
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* CAMPO PLACA CON AUTOSUGGEST */}
+                  <div className="md:col-span-2 relative">
+                    <InputGroup
+                      label="Placa Vehículo"
+                      name={`placa_${Math.random()}`}
+                      value={formData.placa}
+                      onChange={(e) => {
+                        const valor = e.target.value.toUpperCase();
+                        handleChange({
+                          target: { name: "placa", value: valor },
+                        });
+                        handleSearchPlaca(valor);
+                      }}
+                      // Cambiamos "off" por "nope" para forzar al navegador a ocultar su panel negro
+                      autoComplete="new-password"
+                    />
+
+                    {/* LISTA DE SUGERENCIAS (La del fondo que queremos mantener) */}
+                    {sugerenciasPlacas.length > 0 && (
+                      <ul className="absolute z-50 w-full bg-white border border-slate-200 mt-1 rounded-xl shadow-2xl max-h-52 overflow-y-auto">
+                        {sugerenciasPlacas.map((item, index) => (
+                          <li
+                            key={index}
+                            className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-none flex justify-between items-center transition-colors"
+                            onClick={() => {
+                              setFormData((prev) => ({
+                                ...prev,
+                                placa: item.placa,
+                                cubica: item.cubica,
+                              }));
+                              setSugerenciasPlacas([]);
+                            }}
+                          >
+                            <span className="font-bold text-slate-700">
+                              {item.placa}
+                            </span>
+                            <span className="text-sm font-medium bg-blue-100 text-blue-700 px-2 py-1 rounded-lg">
+                              Cub: {item.cubica}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                                  
+                {/* CAMPO CUBICAJE (EDITABLE SI ES NECESARIO) */}
+                  <InputGroup
+                    label="Cubicaje"
+                    name="cubica"
+                    type="number" // Aseguramos que sea numérico
+                    step="0.01"   // Para permitir decimales como 7.43
+                    value={formData.cubica}
+                    onChange={handleChange} // Ahora sí permitimos el cambio manual
+                    placeholder="0.00"
+                    className={formData.cubica ? "bg-blue-50" : "bg-white"} // Cambia de color si ya tiene dato
+                  />
+                </div>
+                                  
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="md:col-span-2">
                     <InputGroup
@@ -1036,26 +1255,6 @@ export default function InvoiceGenerator({
                       </div>
                     )}
                   </div>
-                  {/* <div className="mb-6 p-4 border-2 border-dashed border-blue-200 rounded-lg bg-blue-50/50">
-                  <div className="flex items-center gap-3 mb-2">
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={formData.usarPesaje}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            usarPesaje: e.target.checked,
-                          })
-                        }
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      <span className="ml-3 text-sm font-bold text-blue-800 uppercase tracking-wider">
-                        ¿Habilitar Control de Pesaje?
-                      </span>
-                    </label>
-                  </div> */}
 
                   {formData.usarPesaje && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4 p-4 bg-white rounded-md border border-blue-100 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
@@ -1164,7 +1363,7 @@ export default function InvoiceGenerator({
                               handleLineChange(
                                 idx,
                                 "precioUnitario",
-                                e.target.value
+                                e.target.value,
                               )
                             }
                             className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-xs md:text-sm"
@@ -1278,21 +1477,6 @@ export default function InvoiceGenerator({
                         </option>
                       ))}
                     </select>
-                    {/* <select
-                      name="tipoPago"
-                      value={formData.tipoPago}
-                      onChange={(e) => handleChange(e)}
-                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 bg-white shadow-sm text-sm"
-                    >
-                      {paymentTypes.map((p) => (
-                        <option
-                          key={p.idTipoPago ?? p.id}
-                          value={p.tipo_pago ?? p.name ?? p.tipoPago}
-                        >
-                          {p.tipo_pago ?? p.name ?? p.tipoPago}
-                        </option>
-                      ))}
-                    </select> */}
                   </div>
                 </div>
 
@@ -1363,7 +1547,7 @@ export default function InvoiceGenerator({
                           >
                             {formatCurrency(
                               estadoDeCuenta.saldo -
-                                estadoDeCuenta.valorRemision
+                                estadoDeCuenta.valorRemision,
                             )}
                           </span>
                         </div>
@@ -1387,8 +1571,8 @@ export default function InvoiceGenerator({
                     isLoading
                       ? "bg-gray-400 cursor-not-allowed"
                       : isEditing
-                      ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
-                      : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
+                        ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
+                        : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
                   }`}
                 >
                   {isLoading ? (
@@ -1426,17 +1610,28 @@ export default function InvoiceGenerator({
                 </button>
               </>
             )}
+            {/* Botón para Limpiar Persistencia / Nuevo Registro */}
+            <button
+              type="button"
+              onClick={handleNewRecord}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-700 transition-colors shadow-md"
+              title="Borrar borrador y empezar de nuevo"
+            >
+              <XCircle size={20} />
+              Limpiar Formulario
+            </button>
           </div>
         </div>
-
+        {/*=============================================================================================*/}
         {/* VISTA PREVIA */}
+        {/*=============================================================================================*/}
+
         <div className="flex flex-col gap-4 overflow-hidden">
           <div className="flex justify-between items-center px-1">
             <h3 className="font-bold text-gray-600 flex items-center gap-2">
               <Printer size={18} /> Vista Previa
             </h3>
 
-            {/* AQUÍ APLICAMOS EL CAMBIO */}
             {(lastSavedRecord || isEditing) && (
               <button
                 onClick={() => window.print()}
@@ -1454,246 +1649,266 @@ export default function InvoiceGenerator({
 
           <div className="bg-gray-100 p-2 md:p-4 rounded-xl border border-gray-200 overflow-x-auto">
             <div
-              className="bg-white shadow-2xl p-4 md:p-8 min-h-[800px] w-full min-w-[650px] text-xs md:text-sm text-black font-sans border border-gray-200 relative mx-auto"
+              className="bg-white shadow-2xl p-4 md:p-8 min-h-[800px] w-full min-w-[650px] text-xs md:text-sm text-black font-sans border border-gray-200 relative mx-auto overflow-hidden"
               id="invoice-print"
             >
-              <div className="border-2 border-black mb-4">
-                <div className="flex items-center border-b-2 border-black bg-gray-50 p-3">
-                  <img
-                    src={LogoEmprecal}
-                    alt="Logo Emprecal"
-                    className="w-16 h-16 md:w-20 md:h-20 object-contain mr-4"
-                  />
-                  <div className="flex-1 text-center">
-                    <div className="font-bold text-lg md:text-xl">
-                      EMPRECAL S.A.S NIT. 804.002.739-1
-                    </div>
-                    <div className="text-[10px] md:text-xs font-normal mt-1 text-gray-600">
-                      Kilómetro 9 vía San Gil - Socorro | Cel. 3138880467
-                    </div>
+              {/* --- MARCA DE AGUA DE ANULACIÓN --- */}
+              {previewData.estado === "ANULADA" && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                  <div className="border-8 border-red-500/20 p-4 rounded-xl -rotate-45">
+                    <h1 className="text-red-500/20 text-9xl font-black uppercase tracking-widest select-none">
+                      Anulada
+                    </h1>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="grid grid-cols-2 divide-x-2 divide-black border-x-2 border-b-2 border-black">
-                <div className="p-3">
-                  <div className="grid grid-cols-[70px_1fr] gap-y-2 text-sm md:text-base">
-                    <span className="font-bold">Fecha:</span>
-                    <span>
-                      {previewData.fecha.toLocaleString("es-CO", {
-                        timeZone: "America/Bogota",
-                      })}
-                    </span>
-                    <span className="font-bold">Señores:</span>
-                    <span className="uppercase font-medium truncate">
-                      {previewData.tercero ||
-                        "................................"}
-                    </span>
-                    <span className="font-bold">Direcc:</span>
-                    <span className="uppercase font-medium truncate">
-                      {previewData.direccion ||
-                        "................................"}
-                    </span>
-                    <span className="font-bold">Cédula:</span>
-                    <span className="uppercase font-medium">
-                      {previewData.cedula || "................................"}
-                    </span>
-                    <span className="font-bold">Transp:</span>
-                    <span className="uppercase font-medium truncate">
-                      {previewData.conductor ||
-                        "................................"}
-                    </span>
-                    <span className="font-bold">Llegada:</span>
-                    <span className="uppercase font-medium">
-                      {previewData.horaLlegada}
-                    </span>
-                    <span className="font-bold">Salida:</span>
-                    <span className="uppercase font-medium">
-                      {previewData.horaSalida}
-                    </span>
-                  </div>
-                </div>
-                <div className="p-3 bg-gray-50">
-                  <div className="grid grid-cols-[80px_1fr] gap-y-2 items-center ">
-                    <span className="font-bold text-right pr-3">REMISIÓN:</span>
-                    <span className="font-bold text-red-600 text-lg md:text-xl font-mono tracking-widest">
-                      {formatearRemision(previewData.remision)}
-                    </span>
-                    <span className="font-bold text-right pr-3 text-sm md:text-base">
-                      Celular:
-                    </span>
-                    <span>{previewData.telefono}</span>
-                    <span className="font-bold text-right pr-3 text-sm md:text-base">
-                      Placa:
-                    </span>
-                    <span className="uppercase border-2 border-black px-2 py-0.5 inline-block text-center font-bold w-24 bg-white">
-                      {previewData.placa}
-                    </span>
-                    <span className="font-bold text-right pr-3 text-sm md:text-base ">
-                      Pago:
-                    </span>
-                    <span className="text-[10px] md:text-xs uppercase">
-                      {previewData.tipoPago}
-                    </span>
-
-                    <span className="font-bold text-right pr-3 text-sm md:text-base">
-                      Cubica:
-                    </span>
-
-                    <span className="text-lg md:text-xl font-black uppercase px-1">
-                      {previewData.cubica}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* --- SECCIÓN DE PESAJE (LETRA GRANDE Y LÓGICA CORREGIDA) --- */}
-              {previewData &&
-                (previewData.imprimirPesaje || formData.imprimirPesaje) && (
-                  <div className="border-x-2 border-b-2 border-black p-3 bg-white print:block">
-                    <div className="flex justify-around items-center border-2 border-dashed border-gray-400 p-2 rounded-sm">
-                      {/* PESO ENTRADA */}
-                      <div className="text-center">
-                        <p className="text-[11px] font-bold text-gray-500 uppercase leading-none mb-1">
-                          P. Entrada
-                        </p>
-                        <p className="text-xl font-mono font-bold text-black">
-                          {Number(
-                            previewData.pesoEntrada || 0
-                          ).toLocaleString()}
-                          <span className="text-xs ml-1 font-sans">kg</span>
-                        </p>
+              {/* Contenedor relativo con z-10 para que el contenido real esté sobre la marca de agua */}
+              <div className="relative z-10">
+                <div className="border-2 border-black mb-4">
+                  <div className="flex items-center border-b-2 border-black bg-gray-50 p-3">
+                    <img
+                      src={LogoEmprecal}
+                      alt="Logo Emprecal"
+                      className="w-16 h-16 md:w-20 md:h-20 object-contain mr-4"
+                    />
+                    <div className="flex-1 text-center">
+                      <div className="font-bold text-lg md:text-xl">
+                        EMPRECAL S.A.S NIT. 804.002.739-1
                       </div>
-
-                      <div className="text-3xl text-gray-300 font-light">|</div>
-
-                      {/* PESO SALIDA */}
-                      <div className="text-center">
-                        <p className="text-[11px] font-bold text-gray-500 uppercase leading-none mb-1">
-                          P. Salida
-                        </p>
-                        <p className="text-xl font-mono font-bold text-black">
-                          {Number(previewData.pesoSalida || 0).toLocaleString()}
-                          <span className="text-xs ml-1 font-sans">kg</span>
-                        </p>
-                      </div>
-
-                      <div className="text-3xl text-gray-300 font-light">|</div>
-
-                      {/* PESO NETO */}
-                      <div className="text-center px-6 py-1.5 bg-gray-50 border border-gray-200 rounded-sm">
-                        <p className="text-[11px] font-bold text-green-700 uppercase leading-none mb-1">
-                          Peso Neto
-                        </p>
-                        <p className="text-2xl font-mono font-black text-green-800">
-                          {Number(
-                            previewData.peso_neto ||
-                              Number(previewData.pesoSalida) -
-                                Number(previewData.pesoEntrada) ||
-                              0
-                          ).toLocaleString()}
-                          <span className="text-sm ml-1 font-sans">kg</span>
-                        </p>
+                      <div className="text-[10px] md:text-xs font-normal mt-1 text-gray-600">
+                        Kilómetro 9 vía San Gil - Socorro | Cel. 3138880467
                       </div>
                     </div>
                   </div>
-                )}
-
-              {/* Tabla de items */}
-              <div className="border-x-2 border-b-2 border-black">
-                <div className="grid grid-cols-[80px_1fr_100px_100px] bg-gray-200 border-b-2 border-black font-bold text-center p-1 text-[10px] text-sm uppercase tracking-wider">
-                  <div>Cantidad</div>
-                  <div>Descripción</div>
-                  <div>Precio Unit.</div>
-                  <div>Total</div>
                 </div>
 
-                <div className="min-h-[60px]">
-                  {previewData.materiales.map((li, i) => {
-                    const cantidad = Number(li.cantidad) || 0;
-                    const precio = Number(li.precioUnitario) || 0;
-                    const total = cantidad * precio;
-                    if (lastSavedRecord && cantidad === 0) return null;
+                <div className="grid grid-cols-2 divide-x-2 divide-black border-x-2 border-b-2 border-black">
+                  <div className="p-3">
+                    <div className="grid grid-cols-[70px_1fr] gap-y-2 text-sm md:text-base">
+                      <span className="font-bold">Fecha:</span>
+                      <span>
+                        {previewData.fecha.toLocaleString("es-CO", {
+                          timeZone: "America/Bogota",
+                        })}
+                      </span>
+                      <span className="font-bold">Señores:</span>
+                      <span className="uppercase font-medium truncate">
+                        {previewData.tercero ||
+                          "................................"}
+                      </span>
+                      <span className="font-bold">Direcc:</span>
+                      <span className="uppercase font-medium truncate">
+                        {previewData.direccion ||
+                          "................................"}
+                      </span>
+                      <span className="font-bold">Cédula:</span>
+                      <span className="uppercase font-medium">
+                        {previewData.cedula ||
+                          "................................"}
+                      </span>
+                      <span className="font-bold">Transp:</span>
+                      <span className="uppercase font-medium truncate">
+                        {previewData.conductor ||
+                          "................................"}
+                      </span>
+                      <span className="font-bold">Llegada:</span>
+                      <span className="uppercase font-medium">
+                        {previewData.horaLlegada}
+                      </span>
+                      <span className="font-bold">Salida:</span>
+                      <span className="uppercase font-medium">
+                        {previewData.horaSalida}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gray-50">
+                    <div className="grid grid-cols-[80px_1fr] gap-y-2 items-center ">
+                      <span className="font-bold text-right pr-3">
+                        REMISIÓN:
+                      </span>
+                      <span className="font-bold text-red-600 text-lg md:text-xl font-mono tracking-widest">
+                        {formatearRemision(previewData.remision)}
+                      </span>
+                      <span className="font-bold text-right pr-3 text-sm md:text-base">
+                        Celular:
+                      </span>
+                      <span>{previewData.telefono}</span>
+                      <span className="font-bold text-right pr-3 text-sm md:text-base">
+                        Placa:
+                      </span>
+                      <span className="uppercase border-2 border-black px-2 py-0.5 inline-block text-center font-bold w-24 bg-white">
+                        {previewData.placa}
+                      </span>
+                      <span className="font-bold text-right pr-3 text-sm md:text-base ">
+                        Pago:
+                      </span>
+                      <span className="text-[10px] md:text-xs uppercase">
+                        {previewData.tipoPago}
+                      </span>
 
-                    return (
-                      <div
-                        key={`${li.id || i}-preview`}
-                        className="grid grid-cols-[80px_1fr_100px_100px] text-center p-0.5 border-b border-gray-100 last:border-0 text-base"
-                      >
-                        <div className="py-0.5 font-medium">
-                          {cantidad > 0 ? cantidad : ""}
+                      <span className="font-bold text-right pr-3 text-sm md:text-base">
+                        Cubica:
+                      </span>
+
+                      <span className="text-lg md:text-xl font-black uppercase px-1">
+                        {previewData.cubica}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* --- SECCIÓN DE PESAJE --- */}
+                {previewData &&
+                  (previewData.imprimirPesaje || formData.imprimirPesaje) && (
+                    <div className="border-x-2 border-b-2 border-black p-3 bg-white print:block">
+                      <div className="flex justify-around items-center border-2 border-dashed border-gray-400 p-2 rounded-sm">
+                        <div className="text-center">
+                          <p className="text-[11px] font-bold text-gray-500 uppercase leading-none mb-1">
+                            P. Entrada
+                          </p>
+                          <p className="text-xl font-mono font-bold text-black">
+                            {Number(
+                              previewData.pesoEntrada || 0,
+                            ).toLocaleString()}
+                            <span className="text-xs ml-1 font-sans">kg</span>
+                          </p>
                         </div>
-                        <div className="py-0.5 uppercase text-left px-4 font-medium truncate">
-                          {li.nombre_material || ""}
-                        </div>
-                        <div className="py-0.5 text-gray-600 font-mono">
-                          {precio > 0 ? formatCurrency(precio) : ""}
-                        </div>
-                        <div className="py-0.5 font-medium font-mono">
-                          {total > 0 ? formatCurrency(total) : ""}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
 
-                <div className="border-t-2 border-black text-sm">
-                  <div className="grid grid-cols-[1fr_120px]">
-                    <div className="text-right pr-3 font-bold py-0.5 border-r-2 border-black bg-gray-50">
-                      SUBTOTAL:
-                    </div>
-                    <div className="text-right pr-3 py-0.5 font-mono">
-                      {formatCurrency(previewData.subtotal)}
-                    </div>
-                  </div>
+                        <div className="text-3xl text-gray-300 font-light">
+                          |
+                        </div>
 
-                  {showIVARet && previewData.incluirIva && (
-                    <div className="grid grid-cols-[1fr_120px] border-t border-black text-sm">
-                      <div className="text-right pr-3 font-bold py-0.5 border-r-2 border-black bg-gray-50">
-                        IVA (19%):
-                      </div>
-                      <div className="text-right pr-3 py-0.5 font-mono">
-                        {formatCurrency(previewData.iva)}
+                        <div className="text-center">
+                          <p className="text-[11px] font-bold text-gray-500 uppercase leading-none mb-1">
+                            P. Salida
+                          </p>
+                          <p className="text-xl font-mono font-bold text-black">
+                            {Number(
+                              previewData.pesoSalida || 0,
+                            ).toLocaleString()}
+                            <span className="text-xs ml-1 font-sans">kg</span>
+                          </p>
+                        </div>
+
+                        <div className="text-3xl text-gray-300 font-light">
+                          |
+                        </div>
+
+                        <div className="text-center px-6 py-1.5 bg-gray-50 border border-gray-200 rounded-sm">
+                          <p className="text-[11px] font-bold text-green-700 uppercase leading-none mb-1">
+                            Peso Neto
+                          </p>
+                          <p className="text-2xl font-mono font-black text-green-800">
+                            {Number(
+                              previewData.peso_neto ||
+                                Number(previewData.pesoSalida) -
+                                  Number(previewData.pesoEntrada) ||
+                                0,
+                            ).toLocaleString()}
+                            <span className="text-sm ml-1 font-sans">kg</span>
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}
 
-                  {showIVARet && previewData.incluirRet && (
-                    <div className="grid grid-cols-[1fr_120px] border-t border-black text-sm">
+                {/* Tabla de items */}
+                <div className="border-x-2 border-b-2 border-black">
+                  <div className="grid grid-cols-[80px_1fr_100px_100px] bg-gray-200 border-b-2 border-black font-bold text-center p-1 text-[10px] text-sm uppercase tracking-wider">
+                    <div>Cantidad</div>
+                    <div>Descripción</div>
+                    <div>Precio Unit.</div>
+                    <div>Total</div>
+                  </div>
+
+                  <div className="min-h-[60px]">
+                    {previewData.materiales.map((li, i) => {
+                      const cantidad = Number(li.cantidad) || 0;
+                      const precio = Number(li.precioUnitario) || 0;
+                      const total = cantidad * precio;
+                      if (lastSavedRecord && cantidad === 0) return null;
+
+                      return (
+                        <div
+                          key={`${li.id || i}-preview`}
+                          className="grid grid-cols-[80px_1fr_100px_100px] text-center p-0.5 border-b border-gray-100 last:border-0 text-base"
+                        >
+                          <div className="py-0.5 font-medium">
+                            {cantidad > 0 ? cantidad : ""}
+                          </div>
+                          <div className="py-0.5 uppercase text-left px-4 font-medium truncate">
+                            {li.nombre_material || ""}
+                          </div>
+                          <div className="py-0.5 text-gray-600 font-mono">
+                            {precio > 0 ? formatCurrency(precio) : ""}
+                          </div>
+                          <div className="py-0.5 font-medium font-mono">
+                            {total > 0 ? formatCurrency(total) : ""}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="border-t-2 border-black text-sm">
+                    <div className="grid grid-cols-[1fr_120px]">
                       <div className="text-right pr-3 font-bold py-0.5 border-r-2 border-black bg-gray-50">
-                        RETENCIÓN:
+                        SUBTOTAL:
                       </div>
                       <div className="text-right pr-3 py-0.5 font-mono">
-                        {formatCurrency(previewData.retencion)}
+                        {formatCurrency(previewData.subtotal)}
                       </div>
                     </div>
-                  )}
 
-                  <div className="grid grid-cols-[1fr_120px] border-t-2 border-black bg-gray-200">
-                    <div className="text-right pr-3 font-bold py-2 border-r-2 border-black text-base">
-                      TOTAL A PAGAR:
-                    </div>
-                    <div className="text-right pr-3 py-1 font-bold text-base font-mono">
-                      {showIVARet
-                        ? formatCurrency(previewData.total)
-                        : formatCurrency(previewData.subtotal)}
+                    {showIVARet && previewData.incluirIva && (
+                      <div className="grid grid-cols-[1fr_120px] border-t border-black text-sm">
+                        <div className="text-right pr-3 font-bold py-0.5 border-r-2 border-black bg-gray-50">
+                          IVA (19%):
+                        </div>
+                        <div className="text-right pr-3 py-0.5 font-mono">
+                          {formatCurrency(previewData.iva)}
+                        </div>
+                      </div>
+                    )}
+
+                    {showIVARet && previewData.incluirRet && (
+                      <div className="grid grid-cols-[1fr_120px] border-t border-black text-sm">
+                        <div className="text-right pr-3 font-bold py-0.5 border-r-2 border-black bg-gray-50">
+                          RETENCIÓN:
+                        </div>
+                        <div className="text-right pr-3 py-0.5 font-mono">
+                          {formatCurrency(previewData.retencion)}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-[1fr_120px] border-t-2 border-black bg-gray-200">
+                      <div className="text-right pr-3 font-bold py-2 border-r-2 border-black text-base">
+                        TOTAL A PAGAR:
+                      </div>
+                      <div className="text-right pr-3 py-1 font-bold text-base font-mono">
+                        {showIVARet
+                          ? formatCurrency(previewData.total)
+                          : formatCurrency(previewData.subtotal)}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="border-2 border-black p-3 min-h-[60px] rounded-sm my-4">
-                <span className="font-bold block text-[10px] uppercase text-gray-500">
-                  Obs:
-                </span>
-                <span className="italic">{previewData.observacion}</span>
-              </div>
+                <div className="border-2 border-black p-3 min-h-[60px] rounded-sm my-4">
+                  <span className="font-bold block text-[10px] uppercase text-gray-500">
+                    Obs:
+                  </span>
+                  <span className="italic">{previewData.observacion}</span>
+                </div>
 
-              <div className="w-full mt-12 flex items-center gap-4 max-w-[400px]">
-                <p className="font-bold uppercase tracking-wide whitespace-nowrap text-xs">
-                  Firma tercero:
-                </p>
-                <div className="flex-1 border-t-2 border-black"></div>
+                <div className="w-full mt-12 flex items-center gap-4 max-w-[400px]">
+                  <p className="font-bold uppercase tracking-wide whitespace-nowrap text-xs">
+                    Firma tercero:
+                  </p>
+                  <div className="flex-1 border-t-2 border-black"></div>
+                </div>
               </div>
             </div>
           </div>

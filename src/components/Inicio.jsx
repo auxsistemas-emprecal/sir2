@@ -30,7 +30,7 @@ export default function Inicio({
   const primerDiaMes = new Date(
     new Date().getFullYear(),
     new Date().getMonth(),
-    1
+    1,
   )
     .toISOString()
     .split("T")[0];
@@ -52,7 +52,7 @@ export default function Inicio({
 
         const responseCubicaje = await fetchCubicajePorMaterial(
           fechaInicio,
-          fechaFin
+          fechaFin,
         );
         setDatosCubicajeApi(responseCubicaje || []);
       } catch (error) {
@@ -115,7 +115,7 @@ export default function Inicio({
 
     const saldoTotalAnticipos = anticipos.reduce(
       (acc, a) => acc + (Number(a.saldo) || 0),
-      0
+      0,
     );
 
     const ventasHoy = activeMovements
@@ -129,7 +129,7 @@ export default function Inicio({
 
     const ventasRangoGlobal = movimientosGlobales.reduce(
       (acc, m) => acc + (Number(m.total) || 0),
-      0
+      0,
     );
 
     return {
@@ -247,13 +247,16 @@ export default function Inicio({
       {/* Sección de Notificaciones */}
 
       {/* ================================================================================================ */}
-        {/* ---------------------------------NOTIFICACIONES --------------------------------- */}
+      {/* ---------------------------------NOTIFICACIONES --------------------------------- */}
       {/* ================================================================================================ */}
 
       {notificaciones.length > 0 && (
-        <div className="space-y-4 px-2"> 
+        <div className="space-y-4 px-2">
           {notificaciones.map((noti, index) => (
-            <div key={noti.id_notificacion || `noti.-${index}`} className="animate-bounce-slow">
+            <div
+              key={noti.id_notificacion || `noti.-${index}`}
+              className="animate-bounce-slow"
+            >
               <NotificationBanner data={noti} />
             </div>
           ))}
@@ -261,23 +264,22 @@ export default function Inicio({
       )}
       {/* ================================================================================================ */}
 
-
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-8">
-          <StatCard 
-            icon={<TrendingUp size={32} />} 
-            label="Ventas en Rango" 
-            value={`$${Math.floor(stats.ventasRangoGlobal).toLocaleString()}`} 
-            color="indigo" 
-            onClick={() => setTab && setTab("movimientos")} 
+          <StatCard
+            icon={<TrendingUp size={32} />}
+            label="Ventas en Rango"
+            value={`$${Math.floor(stats.ventasRangoGlobal).toLocaleString()}`}
+            color="indigo"
+            onClick={() => setTab && setTab("movimientos")}
           />
-          <StatCard 
-            icon={<CreditCard size={32} />} 
-            label="Saldo Anticipos" 
-            value={`$${Math.floor(stats.saldoAnticipos).toLocaleString()}`} 
-            color="emerald" 
-            onClick={() => setTab && setTab("archivedAnticipos")} 
+          <StatCard
+            icon={<CreditCard size={32} />}
+            label="Saldo Anticipos"
+            value={`$${Math.floor(stats.saldoAnticipos).toLocaleString()}`}
+            color="emerald"
+            onClick={() => setTab && setTab("archivedAnticipos")}
           />
           <StatCard
             icon={<Users size={32} />}
@@ -329,7 +331,6 @@ export default function Inicio({
 
       {/* SECCIÓN DE GRÁFICAS PRINCIPALES */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
         {/* GRÁFICA TENDENCIA DE INGRESOS */}
         <div className="pro-card p-8">
           {loading && (
@@ -352,26 +353,39 @@ export default function Inicio({
                   x: stats.grafica.fechas,
                   y: stats.grafica.ingresos,
                   type: "bar",
-                  marker: { color: "#6366f1", borderRadius: 8 },
+                  marker: {
+                    color: "#6366f1",
+                    borderRadius: 8,
+                  },
+                  // Muestra el valor exacto con separadores de miles al pasar el mouse
+                  hovertemplate:
+                    "<b>%{x}</b><br>Ingreso: $%{y:,.0f}<extra></extra>",
                 },
               ]}
               layout={{
                 autosize: true,
-                margin: { l: 60, r: 10, t: 30, b: 80 },
+                // Aumentamos el margen izquierdo (l: 80) para que los saldos largos quepan bien
+                margin: { l: 80, r: 20, t: 30, b: 100 },
                 paper_bgcolor: "rgba(0,0,0,0)",
                 plot_bgcolor: "rgba(0,0,0,0)",
                 yaxis: {
                   gridcolor: "#f1f5f9",
-                  tickformat: "$,.0s",
-                  tickfont: { size: 12 },
+                  // CAMBIO CLAVE: "$,.0f" muestra el saldo real (ej: $21,500,000)
+                  tickformat: "$,.0f",
+                  tickfont: { size: 11, color: "#64748b" },
+                  zeroline: false,
                 },
                 xaxis: {
                   showgrid: false,
                   type: "category",
                   tickangle: -45,
                   automargin: true,
-                  tickfont: { size: 12 },
+                  tickfont: { size: 11, color: "#64748b" },
+                  // Asegura que se intente mostrar una etiqueta por cada barra
+                  dtick: 1,
                 },
+                // Espaciado estético entre las barras
+                bargap: 0.3,
               }}
               config={{ responsive: true, displaylogo: false }}
               style={{ width: "100%", height: "100%" }}
@@ -395,7 +409,7 @@ export default function Inicio({
                 {
                   x: stats.grafica.fechas,
                   y: stats.grafica.cantidades,
-                  hovertemplate: 
+                  hovertemplate:
                     "<b>Fecha:</b> %{x}<br>" +
                     "<b>Remisiones:</b> %{y}<extra></extra>",
                   type: "scatter",
@@ -403,7 +417,7 @@ export default function Inicio({
                   line: { color: "#10b981", width: 4, shape: "spline" },
                   fill: "tozeroy",
                   fillcolor: "rgba(16, 185, 129, 0.05)",
-                  marker: { size: 8, color: "#10b981" }
+                  marker: { size: 8, color: "#10b981" },
                 },
               ]}
               layout={{
@@ -438,7 +452,7 @@ export default function Inicio({
           <div className="pro-card p-8 h-full">
             <div className="flex justify-between items-center mb-8">
               <h3 className="text-2xl font-bold text-slate-800">
-                Ultimos Movimientos 
+                Ultimos Movimientos
               </h3>
               <button
                 onClick={() => setTab && setTab("movimientos")}
@@ -602,7 +616,12 @@ export default function Inicio({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-black text-white">
-                  {Math.floor(datosCubicajeApi.reduce((acc, item) => acc + Number(item.total_cubicaje), 0)).toLocaleString()}
+                  {Math.floor(
+                    datosCubicajeApi.reduce(
+                      (acc, item) => acc + Number(item.total_cubicaje),
+                      0,
+                    ),
+                  ).toLocaleString()}
                 </span>
                 <span className="text-lg font-bold text-indigo-400">m³</span>
               </div>
@@ -632,7 +651,7 @@ export default function Inicio({
                     style={{
                       width: `${Math.min(
                         (item.total_cubicaje / 500) * 100,
-                        100
+                        100,
                       )}%`,
                     }}
                   ></div>
@@ -648,8 +667,10 @@ export default function Inicio({
 
 function StatCard({ icon, label, value, color, onClick }) {
   const themes = {
-    indigo: "bg-indigo-50 text-indigo-600 border-indigo-100 shadow-indigo-100/50",
-    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100 shadow-emerald-100/50",
+    indigo:
+      "bg-indigo-50 text-indigo-600 border-indigo-100 shadow-indigo-100/50",
+    emerald:
+      "bg-emerald-50 text-emerald-600 border-emerald-100 shadow-emerald-100/50",
     amber: "bg-amber-50 text-amber-600 border-amber-100 shadow-amber-100/50",
   };
 
@@ -658,7 +679,9 @@ function StatCard({ icon, label, value, color, onClick }) {
       onClick={onClick}
       className="pro-card p-8 flex flex-col justify-between min-h-[190px] cursor-pointer group"
     >
-      <div className={`h-16 w-16 rounded-[20px] flex items-center justify-center ${themes[color]} border mb-6 shadow-sm transition-transform group-hover:scale-110`}>
+      <div
+        className={`h-16 w-16 rounded-[20px] flex items-center justify-center ${themes[color]} border mb-6 shadow-sm transition-transform group-hover:scale-110`}
+      >
         {icon}
       </div>
       <div>

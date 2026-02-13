@@ -31,7 +31,8 @@ import Contabilidad from "./components/Contabilidad.jsx";
 import Inicio from "./components/Inicio.jsx";
 import CuadreRevision from "./components/CuadreRevision.jsx";
 import CuadreCajaDetalles from "./components/CuadreCajaDetalles.jsx";
-import ConsultaCompras from './components/ConsultaCompras';
+import ConsultaCompras from "./components/ConsultaCompras";
+import Plaquetas from "./components/Plaquetas.jsx";
 
 // Servicios
 import { getToken, logoutUser } from "./assets/services/authService.js";
@@ -109,7 +110,7 @@ export default function App() {
 
       const recaudadoHoy = movements
         .filter(
-          (m) => m.fecha === hoy && m.pagado === 1 && m.estado !== "ANULADA"
+          (m) => m.fecha === hoy && m.pagado === 1 && m.estado !== "ANULADA",
         )
         .reduce((acc, curr) => acc + (Number(curr.total) || 0), 0);
 
@@ -177,7 +178,7 @@ export default function App() {
     } catch (error) {
       console.error(
         "Error crítico al cargar anticipo por NoComprobante:",
-        error
+        error,
       );
       throw error;
     }
@@ -264,11 +265,10 @@ export default function App() {
 
   const startEditing = async (movementHeader) => {
     try {
-  
       setEditingMovement(movementHeader);
       setIsEditing(true);
       const itemsData = await fetchMovimientoItemsByRemision(
-        movementHeader.remision
+        movementHeader.remision,
       );
       setEditingItems(itemsData);
       setActiveTab("generador");
@@ -286,23 +286,28 @@ export default function App() {
 
       console.log(headerData);
 
-      if (headerData.idTipoPago === 1 || headerData.idTipoPago === 2 || headerData.idTipoPago === 9) {
+      if (
+        headerData.idTipoPago === 1 ||
+        headerData.idTipoPago === 2 ||
+        headerData.idTipoPago === 9
+      ) {
         headerData.pagado = 1;
       }
+      console.log(headerData);
       await createMovimiento(headerData);
       const remisionCreada = await fetchLastRemisionNumber();
 
       if (headerData.estadoDeCuenta) {
         await updatePago(
           headerData.estadoDeCuenta.no_ingreso,
-          headerData.estadoDeCuenta
+          headerData.estadoDeCuenta,
         );
       }
 
       if (headerData.idTipoPago === 4) {
         let creditoPayload = null;
         const resultadoCredito = await fetchCreditosPorNombre(
-          headerData.tercero
+          headerData.tercero,
         );
         if (resultadoCredito.length === 0) {
           creditoPayload = {
@@ -361,7 +366,7 @@ export default function App() {
     const nuevoEstado =
       pagoCompleto.estado === "VIGENTE" ? "ANULADA" : "VIGENTE";
     const idTipoPago = paymentTypes.find(
-      (tipo) => tipo.tipo_pago === pagoCompleto.tipoPago
+      (tipo) => tipo.tipo_pago === pagoCompleto.tipoPago,
     )?.idTipoPago;
 
     if (!id_pago) {
@@ -414,7 +419,7 @@ export default function App() {
     const fechaHoy = new Date().toISOString().split("T")[0];
 
     const idTipoPago = paymentTypes.find(
-      (tipo) => tipo.tipo_pago === anticipo.tipoPago
+      (tipo) => tipo.tipo_pago === anticipo.tipoPago,
     )?.idTipoPago;
 
     try {
@@ -570,14 +575,14 @@ export default function App() {
               onTogglePago={handleTogglePagoAnticipo}
               onVerDetalleRemision={(numRemision) => {
                 const movimiento = movements.find(
-                  (m) => String(m.remision) === String(numRemision)
+                  (m) => String(m.remision) === String(numRemision),
                 );
                 if (movimiento) {
                   startEditing(movimiento);
                 } else {
                   alert(
                     "No se encontró el registro físico de la remisión REM-" +
-                      numRemision
+                      numRemision,
                   );
                 }
               }}
@@ -587,6 +592,9 @@ export default function App() {
           {activeTab === "utilidades" && (
             <Utilidades setActiveTab={setActiveTab} />
           )}
+
+          {/* NUEVO: Registro de Plaquetas */}
+          {activeTab === "plaquetas" && <Plaquetas />}
 
           {activeTab === "terceros" && (
             <Terceros data={terceros} setData={setTerceros} />
@@ -606,21 +614,22 @@ export default function App() {
           {activeTab === "PreciosEspeciales" && <PreciosEspeciales />}
 
           {activeTab === "CuadreRevision" && (
-            <CuadreRevision onVerDetalle={(cuadre) => {
+            <CuadreRevision
+              onVerDetalle={(cuadre) => {
                 setCuadreSeleccionado(cuadre);
                 setActiveTab("CuadreCajaDetalles");
-            }} />
-          )}
-
-          {activeTab === "CuadreCajaDetalles" && (
-            <CuadreCajaDetalles 
-              datos={cuadreSeleccionado} 
-              onBack={() => setActiveTab("CuadreRevision")} 
+              }}
             />
           )}
 
-          {activeTab === 'ConsultaCompras' && <ConsultaCompras />}
+          {activeTab === "CuadreCajaDetalles" && (
+            <CuadreCajaDetalles
+              datos={cuadreSeleccionado}
+              onBack={() => setActiveTab("CuadreRevision")}
+            />
+          )}
 
+          {activeTab === "ConsultaCompras" && <ConsultaCompras />}
         </div>
       </main>
     </div>

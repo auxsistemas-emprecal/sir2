@@ -117,3 +117,13 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+@keyframes progress-buffer {
+  0% { transform: translateX(-100%); width: 30%; }
+  50% { width: 60%; }
+  100% { transform: translateX(400%); width: 30%; }
+}
+
+.animate-progress-buffer {
+  animation: progress-buffer 1.5s infinite linear;
+}

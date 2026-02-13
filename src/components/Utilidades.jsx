@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, Settings, SquareUser, UserStar, FileText } from 'lucide-react';
+import { BarChart3, Settings, SquareUser, UserStar, FileText, Hash } from 'lucide-react';
 
 const Utilidades = ({ setActiveTab }) => {
   const modulos = [
@@ -38,12 +38,19 @@ const Utilidades = ({ setActiveTab }) => {
       icon: <FileText size={32} className="text-purple-500" />,
       color: 'hover:border-purple-500'
     },
-      {
+    {
       id: 'ConsultaCompras',
       titulo: 'Consulta de Compras de la mina',
       descripcion: 'Visualiza y exporta el historial de adquisiciones de la mina.',
       icon: <BarChart3 size={32} className="text-blue-500" />,
       color: 'hover:border-blue-500'
+    },
+    {
+      id: 'plaquetas',
+      titulo: 'Plaquetas de Maquinaria',
+      descripcion: 'Gestión de identificación, marcas y modelos de equipos pesados.',
+      icon: <Hash size={32} className="text-indigo-500" />,
+      color: 'hover:border-indigo-500'
     },
   ];
 

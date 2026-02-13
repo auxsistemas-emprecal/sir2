@@ -6,9 +6,11 @@ const isDev = true;
 
 const BASE_URL = !isDev
   ? "https://pedregosa-auxsistemas-emprecal7067-4n2fqys7.leapcell.dev"
-  : "http://192.168.150.5:8000";
+  : "http://192.168.150.2:8000";
 
-const BASE_URL_COMPRAS = "http://192.168.150.5:8001";
+// const BASE_URL_COMPRAS = "http://192.168.150.5:8001";
+const BASE_URL_COMPRAS =
+  "https://socpi-auxsistemas-emprecal7067-1pus16u8.leapcell.dev";
 
 // Headers con token
 // Headers con token con log de depuración
@@ -19,6 +21,8 @@ const getAuthHeaders = () => {
     Authorization: `Bearer ${token}`,
   };
 };
+
+
 
 // ====================================================================
 // 🟩 MOVIMIENTOS
@@ -36,7 +40,7 @@ export const fetchMovimientos = async () => {
     if (!response.ok) {
       console.error(
         "Error en la respuesta de red para /vistaMovimientos:",
-        response.status
+        response.status,
       );
       return [];
     }
@@ -63,7 +67,7 @@ export const fetchLastRemisionNumber = async () => {
 
     if (!response.ok) {
       console.error(
-        `Fallo al obtener el último consecutivo (Estatus: ${response.status})`
+        `Fallo al obtener el último consecutivo (Estatus: ${response.status})`,
       );
       return null;
     }
@@ -92,10 +96,10 @@ export const fetchMovimiento = async (remision) => {
       }
       console.error(
         `Error en la respuesta de red para /movimientos/${remision}:`,
-        response.status
+        response.status,
       );
       throw new Error(
-        `Fallo al obtener movimiento (Estatus: ${response.status})`
+        `Fallo al obtener movimiento (Estatus: ${response.status})`,
       );
     }
 
@@ -152,7 +156,7 @@ export const updateMovimiento = async (remision, movimiento) => {
     const errorDetails = await res.json();
     console.error(
       `Error ${res.status} al actualizar movimiento ${remision}:`,
-      errorDetails
+      errorDetails,
     );
     throw new Error(`Fallo la actualización (Estatus: ${res.status})`);
   }
@@ -166,14 +170,14 @@ export const cambiarEstadoMovimiento = async (remision, nuevo_estado) => {
     {
       method: "PUT",
       headers: getAuthHeaders(),
-    }
+    },
   );
 
   if (!res.ok) {
     const errorDetails = await res.json();
     console.error(
       `Error ${res.status} al actualizar movimiento ${remision}:`,
-      errorDetails
+      errorDetails,
     );
     throw new Error(`Fallo la actualización (Estatus: ${res.status})`);
   }
@@ -187,14 +191,14 @@ export const cambiarEstadoDePagoMovimiento = async (remision, nuevo_estado) => {
     {
       method: "PUT",
       headers: getAuthHeaders(),
-    }
+    },
   );
 
   if (!res.ok) {
     const errorDetails = await res.json();
     console.error(
       `Error ${res.status} al actualizar movimiento ${remision}:`,
-      errorDetails
+      errorDetails,
     );
     throw new Error(`Fallo la actualización (Estatus: ${res.status})`);
   }
@@ -289,14 +293,14 @@ export const fetchMovimientoItemsByRemision = async (remision) => {
         //     // 'Content-Type': 'application/json',
         //     // 'Authorization': `Bearer ${token}`,
         // },
-      }
+      },
     );
 
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(
         errorData.message ||
-          `Error al obtener ítems de remisión ${remision}: ${response.statusText}`
+          `Error al obtener ítems de remisión ${remision}: ${response.statusText}`,
       );
     }
 
@@ -382,6 +386,30 @@ export const updateTercero = async (id, tercero) => {
   }
 };
 
+/**
+ /////////////////// Elimina un tercero por su ID.  ///////////////////
+ */
+export const deleteTercero = async (tercero) => {
+  try {
+    const response = await fetch(`${BASE_URL}/terceros`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(tercero),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Error al eliminar");
+    }
+
+    // Retornamos el json o un status success
+    return await response.json();
+  } catch (error) {
+    console.error("Error en deleteTercero:", error);
+    return null;
+  }
+};
+
 export const searchTercero = async (query = "") => {
   try {
     const response = await fetch(`${BASE_URL}/terceros/${query}`, {
@@ -395,6 +423,31 @@ export const searchTercero = async (query = "") => {
   }
 };
 
+export const searchTerceroById = async (query = "") => {
+  try {
+    const response = await fetch(`${BASE_URL}/terceros/id/${query}`, {
+      headers: getAuthHeaders(),
+    });
+    const json = await response.json();
+    return Array.isArray(json.data) ? json.data : [];
+  } catch (error) {
+    console.error("Error buscando terceros:", error);
+    return [];
+  }
+};
+
+export const searchPlaca = async (query = "") => {
+  try {
+    const response = await fetch(`${BASE_URL}/placas/buscar/${query}`, {
+      headers: getAuthHeaders(),
+    });
+    const json = await response.json();
+    return Array.isArray(json.data) ? json.data : [];
+  } catch (error) {
+    console.error("Error buscando placas:", error);
+    return [];
+  }
+};
 
 /* ============================================================
    PRECIOS ESPECIALES
@@ -418,7 +471,7 @@ export const fetchPreciosEspecialesPorTercero = async (nombreTercero) => {
       `${BASE_URL}/preciosEspeciales/precioEspecialPorTercero/${nombreTercero}`,
       {
         headers: getAuthHeaders(),
-      }
+      },
     );
     const json = await response.json();
     return Array.isArray(json.data) ? json.data : [];
@@ -434,7 +487,7 @@ export const deletePrecioEspecial = async (id_tercero_material) => {
     {
       method: "DELETE",
       headers: getAuthHeaders(),
-    }
+    },
   );
 
   return await res.json();
@@ -462,7 +515,7 @@ export const updatePrecioEspecial = async (id_tercero_material, formData) => {
         method: "PUT",
         headers: getAuthHeaders(),
         body: JSON.stringify(formData),
-      }
+      },
     );
     return await response.json();
   } catch (error) {
@@ -484,6 +537,28 @@ export const fetchPlacas = async () => {
     return Array.isArray(json.data) ? json.data : [];
   } catch (error) {
     console.error("Error obteniendo placas:", error);
+    return [];
+  }
+};
+
+/**
+ * Busca placas específicas y su cubicaje filtrando por el texto ingresado
+ * @param {string} placa - Texto de búsqueda (ej: "S")
+ */
+export const buscarPlacasPorFiltro = async (placa) => {
+  try {
+    const res = await fetch(`${BASE_URL}/placas/buscar/${placa}`, {
+      headers: getAuthHeaders(), // Reutiliza tu lógica de seguridad JWT
+    });
+
+    const json = await res.json();
+
+    // Según tu imagen, la API responde con { status: "success", data: [...] }
+    return json.status === "success" && Array.isArray(json.data)
+      ? json.data
+      : [];
+  } catch (error) {
+    console.error("Error buscando placa por filtro:", error);
     return [];
   }
 };
@@ -630,7 +705,7 @@ export const fetchPagosPorNombre = async (nombreTercero = "") => {
       `${BASE_URL}/pagos/anticiposPorNombre/${nombreTercero}`,
       {
         headers: getAuthHeaders(),
-      }
+      },
     );
 
     if (!res.ok) {
@@ -811,7 +886,7 @@ export const fetchCreditosPorNombre = async (nombreTercero = "") => {
       `${BASE_URL}/creditos/buscarPorNombreTercero/${nombreTercero}`,
       {
         headers: getAuthHeaders(),
-      }
+      },
     );
     const json = await response.json();
     return json.status === "success" ? json.data : [];
@@ -830,7 +905,7 @@ export const fetchCreditosPorRemision = async (remision = "0") => {
       `${BASE_URL}/creditos/creditoPorRemision/${remision}`,
       {
         headers: getAuthHeaders(),
-      }
+      },
     );
     const json = await response.json();
     return json.data;
@@ -906,7 +981,7 @@ export const createGasto = async (gasto) => {
       const errorData = await response.json();
       throw new Error(
         errorData.message ||
-          `Error en la respuesta del servidor: ${response.status}`
+          `Error en la respuesta del servidor: ${response.status}`,
       );
     }
 
@@ -984,7 +1059,7 @@ export const saveCuadreCaja = async (datos) => {
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(
-        errorData.message || `Error al guardar el cuadre: ${response.status}`
+        errorData.message || `Error al guardar el cuadre: ${response.status}`,
       );
     }
     return await response.json();
@@ -1044,7 +1119,7 @@ export const createGastoDiario = async (gasto) => {
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(
-        errorData.message || `Error guardando gasto (${response.status})`
+        errorData.message || `Error guardando gasto (${response.status})`,
       );
     }
 
@@ -1064,18 +1139,27 @@ export const createCuadreDiario = async (arqueo) => {
     throw new Error("Autenticación requerida");
   }
 
+  // --- NUEVA LÓGICA DE LIMPIEZA ---
+  // Convertimos cualquier campo que sea string vacío "" a 0
+  const arqueoLimpio = Object.entries(arqueo).reduce((acc, [key, value]) => {
+    acc[key] = value === "" ? 0 : value;
+    return acc;
+  }, {});
+  // --------------------------------
+
   try {
     const response = await fetch(`${BASE_URL}/cuadresDiarios/`, {
       method: "POST",
       headers: getAuthHeaders(),
-      body: JSON.stringify(arqueo),
+      body: JSON.stringify(arqueoLimpio), // Enviamos el objeto limpio
     });
 
     if (!response.ok) {
       const errorData = await response.json();
+      console.log("Detalle del error 422:", errorData.detail);
       throw new Error(
         errorData.message ||
-          `Error guardando cuadre diario (${response.status})`
+          `Error guardando cuadre diario (${response.status})`,
       );
     }
 
@@ -1085,6 +1169,34 @@ export const createCuadreDiario = async (arqueo) => {
     throw error;
   }
 };
+// export const createCuadreDiario = async (arqueo) => {
+//   if (!getToken()) {
+//     throw new Error("Autenticación requerida");
+//   }
+  
+
+//   try {
+//     const response = await fetch(`${BASE_URL}/cuadresDiarios/`, {
+//       method: "POST",
+//       headers: getAuthHeaders(),
+//       body: JSON.stringify(arqueo),
+//     });
+
+//     if (!response.ok) {
+//       const errorData = await response.json();
+//       console.log("Detalle del error 422:", errorData.detail);
+//       throw new Error(
+//         errorData.message ||
+//           `Error guardando cuadre diario (${response.status})`,
+//       );
+//     }
+
+//     return await response.json();
+//   } catch (error) {
+//     console.error("❌ Error en createCuadreDiario:", error);
+//     throw error;
+//   }
+// };
 
 // ====================================================================
 // 🟦 VISUALIZACION DE CUADRE CAJA EN UTILIDADES
@@ -1116,7 +1228,7 @@ export const fetchGastosDetalleHistorico = async (fecha, timesnap) => {
   try {
     // Usamos encodeURIComponent para que los espacios y símbolos de la fecha no rompan la URL
     const url = `${BASE_URL}/cuadre_caja_view/corte-temporal?fecha_busqueda=${fecha}&timesnap=${encodeURIComponent(
-      timesnap
+      timesnap,
     )}`;
 
     const response = await fetch(url, {
@@ -1157,7 +1269,7 @@ export const updateFacturaMovimiento = async (remision, n_factura) => {
     if (!res.ok) {
       const errorDetails = await res.json();
       throw new Error(
-        errorDetails.message || `Error ${res.status} al actualizar factura`
+        errorDetails.message || `Error ${res.status} al actualizar factura`,
       );
     }
 
@@ -1165,7 +1277,7 @@ export const updateFacturaMovimiento = async (remision, n_factura) => {
   } catch (error) {
     console.error(
       `Error en updateFacturaMovimiento para remisión ${remision}:`,
-      error
+      error,
     );
     throw error;
   }
@@ -1186,7 +1298,7 @@ export const createRegistroFactura = async (datosFactura) => {
     if (!res.ok) {
       const errorDetails = await res.json();
       throw new Error(
-        errorDetails.message || "Error al crear registro de factura"
+        errorDetails.message || "Error al crear registro de factura",
       );
     }
 
@@ -1204,7 +1316,7 @@ export const createRegistroFactura = async (datosFactura) => {
 export const fetchTotalMaterialPorTercero = async (tercero, inicio, fin) => {
   try {
     const url = `${BASE_URL}/totalMaterialPorTercero?nombreTercero=${encodeURIComponent(
-      tercero
+      tercero,
     )}&fechaInicio=${inicio}&fechaFin=${fin}`;
 
     const response = await fetch(url, { headers: getAuthHeaders() });
@@ -1216,8 +1328,8 @@ export const fetchTotalMaterialPorTercero = async (tercero, inicio, fin) => {
     return Array.isArray(json.data)
       ? json.data
       : Array.isArray(json)
-      ? json
-      : [];
+        ? json
+        : [];
   } catch (error) {
     console.error("Error en reporte:", error);
     return [];
@@ -1230,14 +1342,14 @@ export const fetchTercerosBusqueda = async (query = "") => {
       `${BASE_URL}/terceros?search=${encodeURIComponent(query)}`,
       {
         headers: getAuthHeaders(),
-      }
+      },
     );
     const json = await response.json();
     return Array.isArray(json.data)
       ? json.data
       : Array.isArray(json)
-      ? json
-      : [];
+        ? json
+        : [];
   } catch (error) {
     console.error("Error en búsqueda:", error);
     return [];
@@ -1249,9 +1361,9 @@ export const fetchRemisionesPorTercero = async (nombreTercero, inicio, fin) => {
   try {
     const res = await fetch(
       `${BASE_URL}/totalMaterialPorTercero/remisionesPorTercero?nombreTercero=${encodeURIComponent(
-        nombreTercero
+        nombreTercero,
       )}&fechaInicio=${inicio}&fechaFin=${fin}`,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
 
     if (!res.ok) throw new Error("Error al obtener remisiones");
@@ -1269,7 +1381,7 @@ export const fetchItemsPorRemision = async (numRemision) => {
   try {
     const res = await fetch(
       `${BASE_URL}/movimientoItems/remision/${numRemision}`,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
 
     if (!res.ok) throw new Error("Error al obtener items de la remisión");
@@ -1318,7 +1430,7 @@ export const fetchCubicajePorMaterial = async (inicio, fin) => {
   try {
     // Enviamos las fechas tal cual vienen del input date (2026-01-09 23:59:59)  YYYY-MM-DD HH:mm:ss
     const url = `${BASE_URL}/movimientoItems/cubicaje-material?fecha_inicio=${encodeURIComponent(
-      inicio
+      inicio,
     )}&fecha_fin=${encodeURIComponent(fin)}`;
 
     const response = await fetch(url, { headers: getAuthHeaders() });
@@ -1362,7 +1474,8 @@ export const fetchNotificaciones = async () => {
  * Endpoint: GET /ordenes_compra
  * @returns {Promise<Array>} Array de órdenes de compra
  */
-export const fetchOrdenesCompra = async () => { // No recomendable
+export const fetchOrdenesCompra = async () => {
+  // No recomendable
   try {
     const response = await fetch(`${BASE_URL_COMPRAS}/ordenes_compra`, {
       headers: getAuthHeaders(),
@@ -1440,7 +1553,7 @@ export const buscarOrdenesCompra = async (filtros = {}) => {
 export const fetchOrdenesCompraByProveedor = async (proveedor, limit = 100) => {
   try {
     const url = `${BASE_URL_COMPRAS}/ordenes_compra/proveedor/${encodeURIComponent(
-      proveedor
+      proveedor,
     )}?limit=${limit}`;
 
     const response = await fetch(url, {
@@ -1470,7 +1583,7 @@ export const fetchOrdenesCompraByProveedor = async (proveedor, limit = 100) => {
 export const fetchOrdenesCompraByItem = async (descripcion, limit = 100) => {
   try {
     const url = `${BASE_URL_COMPRAS}/ordenes_compra/item/${encodeURIComponent(
-      descripcion
+      descripcion,
     )}?limit=${limit}`;
 
     const response = await fetch(url, {
@@ -1500,7 +1613,7 @@ export const fetchOrdenesCompraByItem = async (descripcion, limit = 100) => {
 export const fetchOrdenesCompraByDestino = async (destino, limit = 100) => {
   try {
     const url = `${BASE_URL_COMPRAS}/ordenes_compra/destino/${encodeURIComponent(
-      destino
+      destino,
     )}?limit=${limit}`;
 
     const response = await fetch(url, {
@@ -1531,7 +1644,7 @@ export const fetchOrdenesCompraByDestino = async (destino, limit = 100) => {
 export const fetchOrdenesCompraByFecha = async (
   fecha_desde,
   fecha_hasta,
-  limit = 100
+  limit = 100,
 ) => {
   try {
     const params = new URLSearchParams();
@@ -1567,7 +1680,7 @@ export const fetchOrdenesCompraByFecha = async (
  */
 export const fetchEstadisticasOrdenesCompra = async (
   fecha_desde = null,
-  fecha_hasta = null
+  fecha_hasta = null,
 ) => {
   try {
     const params = new URLSearchParams();
@@ -1590,5 +1703,164 @@ export const fetchEstadisticasOrdenesCompra = async (
   } catch (error) {
     console.error("Error en fetchEstadisticasOrdenesCompra:", error);
     return [];
+  }
+};
+
+//===============================================================================================
+//------------------------------------------- DATOS TEMPORALES ----------------------------------
+//===============================================================================================
+
+export const updateDatoTemporal = async (id, data) => {
+  try {
+    const response = await fetch(`${BASE_URL}/datos-temporales/${id}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Error en updateDatoTemporal:", error);
+    return null;
+  }
+};
+
+export const fetchDatoTemporal = async (id) => {
+  try {
+    const response = await fetch(`${BASE_URL}/datos-temporales/id/${id}`, {
+      headers: getAuthHeaders(),
+    });
+
+    const json = await response.json();
+    const esDeHoy =
+      json.data.create_at.split("T")[0] ==
+      new Date().toISOString().split("T")[0];
+
+    if (!esDeHoy)
+      return {
+        ...json.data,
+        valor: "0",
+      };
+
+    // Ajustado por si tu API devuelve {status: 'success', data: []}
+    return json.status === "success" ? json.data : json;
+  } catch (error) {
+    console.error("Error en fetchPlaquetas:", error);
+    return [];
+  }
+};
+
+export const fetchDatosTemporales = async () => {
+  try {
+    const response = await fetch(`${BASE_URL}/datos-temporales`, {
+      headers: getAuthHeaders(),
+    });
+
+    console.log("Response Status:", response.status);
+
+    const json = await response.json();
+    const newJson = json.data.map((dato) => {
+      const esDeHoy =
+        dato.create_at.split("T")[0] == new Date().toISOString().split("T")[0];
+      console.log("Dato: ", dato.nombreCampo, " Es de hoy: ", esDeHoy);
+      if (!esDeHoy)
+        return {
+          ...dato,
+          valor: "",
+        };
+      return dato;
+    });
+
+    // Ajustado por si tu API devuelve {status: 'success', data: []}
+    return json.status === "success" ? newJson : json;
+  } catch (error) {
+    console.error("Error en datos-temporales:", error);
+    return [];
+  }
+};
+
+//===================================================================================================
+//-------------------------------------------- PLAQUETAS --------------------------------------------
+//===================================================================================================
+
+export const searchPlaquetas = async (query) => {
+  try {
+    // Nota: Ajustamos a tu endpoint específico
+    const response = await fetch(
+      `${BASE_URL}/plaquetas/search?plaqueta=${query}&limit=100&offset=0`,
+    );
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error buscando plaquetas:", error);
+    return [];
+  }
+};
+/**
+ * paginacion y búsqueda de plaquetas
+ */
+export const fetchPlaquetas = async (page = 1, limit = 10, search = "") => {
+  try {
+    const url = search
+      ? `${BASE_URL}/plaquetas/search?q=${search}&page=${page}&limit=${limit}`
+      : `${BASE_URL}/plaquetas?page=${page}&limit=${limit}`;
+
+    const response = await fetch(url, { headers: getAuthHeaders() });
+
+    if (!response.ok) throw new Error("Error en la respuesta del servidor");
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error en fetchPlaquetas:", error);
+    return { status: "error", data: [], info: { totalPages: 1 } };
+  }
+};
+
+/**
+ * Crea una nueva plaqueta.
+ */
+export const createPlaqueta = async (data) => {
+  try {
+    const response = await fetch(`${BASE_URL}/plaquetas`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Error en createPlaqueta:", error);
+    return null;
+  }
+};
+
+/**
+ * Actualiza una plaqueta (PUT).
+ */
+export const updatePlaqueta = async (id, data) => {
+  try {
+    const response = await fetch(`${BASE_URL}/plaquetas/${id}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Error en updatePlaqueta:", error);
+    return null;
+  }
+};
+
+/**
+ * Elimina una plaqueta (DELETE).
+ */
+export const deletePlaqueta = async (id) => {
+  try {
+    const response = await fetch(`${BASE_URL}/plaquetas/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Error en deletePlaqueta:", error);
+    return null;
   }
 };

@@ -13,6 +13,7 @@ function InputAutosuggest({
   searchEndpoint,
   textSuggestor = "nombre",
   itemsKeys = "id_tercero",
+  subText = "placa"
 }) {
   const [tercerosSuggest, setTercerosSuggest] = useState([]);
   const [globalValue, setGlobalValue] = useState("");
@@ -134,7 +135,7 @@ function InputAutosuggest({
                       <div className="flex justify-between items-center">
                         <span>{item[textSuggestor]}</span>
                         <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                          {item.placa ?? ""}
+                          {item[subText] ?? ""}
                         </span>
                       </div>
                     </li>
